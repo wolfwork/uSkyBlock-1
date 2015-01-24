@@ -5,7 +5,10 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import us.talabrek.ultimateskyblock.api.event.uSkyBlockEvent;
+import us.talabrek.ultimateskyblock.api.event.uSkyBlockScoreChangedEvent;
 import us.talabrek.ultimateskyblock.player.PlayerInfo;
 import us.talabrek.ultimateskyblock.Settings;
 import us.talabrek.ultimateskyblock.uSkyBlock;
@@ -109,9 +112,13 @@ public class LevelLogic {
     }
 
     public IslandScore calculateScore(PlayerInfo playerInfo) {
+        final Location l = playerInfo.getIslandLocation();
+        return calculateScore(l);
+    }
+
+    public IslandScore calculateScore(Location l) {
         final int radius = Settings.island_protectionRange / 2;
         int pointsPerLevel = config.getInt("general.pointsPerLevel");
-        final Location l = playerInfo.getIslandLocation();
         final int px = l.getBlockX();
         final int pz = l.getBlockZ();
         final World w = l.getWorld();

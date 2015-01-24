@@ -1,36 +1,35 @@
 package us.talabrek.ultimateskyblock.island;
 
+import com.sk89q.worldedit.Vector;
+import com.sk89q.worldedit.regions.CuboidRegion;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.World;
-import org.bukkit.block.Block;
 import org.bukkit.command.CommandSender;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.InvalidConfigurationException;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import us.talabrek.ultimateskyblock.Settings;
 import us.talabrek.ultimateskyblock.api.IslandLevel;
+import us.talabrek.ultimateskyblock.api.event.uSkyBlockEvent;
 import us.talabrek.ultimateskyblock.handler.WorldEditHandler;
 import us.talabrek.ultimateskyblock.handler.WorldGuardHandler;
+import us.talabrek.ultimateskyblock.handler.task.WorldEditClearTask;
 import us.talabrek.ultimateskyblock.island.task.RenamePlayerTask;
 import us.talabrek.ultimateskyblock.player.PlayerInfo;
 import us.talabrek.ultimateskyblock.uSkyBlock;
 import us.talabrek.ultimateskyblock.util.FileUtil;
-import us.talabrek.ultimateskyblock.util.LocationUtil;
+import us.talabrek.ultimateskyblock.util.PlayerUtil;
 import us.talabrek.ultimateskyblock.util.TimeUtil;
 import us.talabrek.ultimateskyblock.uuid.PlayerNameChangedEvent;
 
 import java.io.File;
-import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Level;
 
-import static org.bukkit.Material.AIR;
 import static org.bukkit.Material.BEDROCK;
 
 /**
@@ -100,38 +99,10 @@ public class IslandLogic {
                 || w.getBlockAt(px-radius, py, pz+radius).getType() == BEDROCK
                 || w.getBlockAt(px-radius, py, pz-radius).getType() == BEDROCK)
         {
-            sender.sendMessage(String.format("\u00a74Flatland detected under your island!\u00a7e Clearing it in %s, stay clear.", TimeUtil.ticksAsString(delay)));
-            final AtomicInteger sharedY = new AtomicInteger(0);
-            final Runnable clearYLayer = new Runnable() {
-                long tStart;
-                long timeUsed = 0;
-                @Override
-                public void run() {
-                    long t = System.currentTimeMillis();
-                    int y = sharedY.getAndIncrement();
-                    if (y  <= 3) {
-                        if (y == 0) {
-                            tStart = t;
-                        }
-                        for (int dx = 1; dx <= range; dx++) {
-                            for (int dz = 1; dz <= range; dz++) {
-                                Block b = w.getBlockAt(px + (dx % 2 == 0 ? dx/2 : -dx/2),
-                                        y, pz + (dz % 2 == 0 ? dz/2 : -dz/2));
-                                if (b.getType() != AIR) {
-                                    b.setType(AIR);
-                                }
-                            }
-                        }
-                        long diffTicks = (System.currentTimeMillis() - t)/50;
-                        timeUsed += diffTicks;
-                        plugin.getServer().getScheduler().runTaskLater(plugin, this, diffTicks);
-                    } else {
-                        plugin.log(Level.INFO, String.format("Flatland cleared at %s in %s (%s)", LocationUtil.asString(loc), TimeUtil.millisAsString(System.currentTimeMillis() - tStart), TimeUtil.millisAsString(timeUsed)));
-                        sender.sendMessage("\u00a7eFlatland was cleared under your island. Take care.");
-                    }
-                }
-            };
-            plugin.getServer().getScheduler().runTaskLater(plugin, clearYLayer, delay);
+            sender.sendMessage(String.format("\u00a7c-----------------------------------\n\u00a7cFlatland detected under your island!\n\u00a7e Clearing it in %s, stay clear.\n\u00a7c-----------------------------------\n", TimeUtil.ticksAsString(delay)));
+            new WorldEditClearTask(plugin, sender, new CuboidRegion(new Vector(px-radius, 0, pz-radius),
+                    new Vector(px+radius, 4, pz+radius)),
+                    "\u00a7eFlatland was cleared under your island (%s). Take care.").runTaskLater(plugin, delay);
             return true;
         }
         return false;
@@ -183,7 +154,7 @@ public class IslandLogic {
             plugin.getServer().getScheduler().runTaskAsynchronously(plugin, new Runnable() {
                 @Override
                 public void run() {
-                    generateTopTen();
+                    generateTopTen(sender);
                     displayTopTen(sender);
                 }
             });
@@ -202,30 +173,21 @@ public class IslandLogic {
         }
     }
 
-    private void generateTopTen() {
+    private void generateTopTen(final CommandSender sender) {
         List<IslandLevel> topTen = new ArrayList<>();
         final File folder = directoryIslands;
-        final File[] listOfFiles = folder.listFiles();
-        for (File file : listOfFiles) {
-            FileConfiguration islandConfig = readIslandConfig(file);
-            double level = islandConfig != null ? islandConfig.getDouble("general.level", 0) : 0;
-            if (islandConfig != null && level > 0) {
-                String partyLeader = islandConfig.getString("party.leader");
-                PlayerInfo pi = plugin.getPlayerInfo(partyLeader);
-                String partyLeaderName = partyLeader;
-                if (pi != null) {
-                    partyLeaderName = pi.getDisplayName();
-                }
-                ConfigurationSection members = islandConfig.getConfigurationSection("party.members");
-                List<String> memberList = new ArrayList<>();
-                if (members != null) {
-                    Set<String> membersStr = members.getKeys(false);
-                    if (membersStr != null) {
-                        membersStr.remove(partyLeader);
-                        memberList.addAll(membersStr);
-                    }
-                }
-                topTen.add(new IslandLevel(islandConfig.getName(), partyLeaderName, memberList, level));
+        final String[] listOfFiles = folder.list(FileUtil.createYmlFilenameFilter());
+        for (String file : listOfFiles) {
+            String islandName = FileUtil.getBasename(file);
+            boolean wasLoaded = islands.containsKey(islandName);
+            IslandInfo islandInfo = getIslandInfo(islandName);
+            double level = islandInfo != null ? islandInfo.getLevel() : 0;
+            if (islandInfo != null && level > 10) {
+                IslandLevel islandLevel = createIslandLevel(islandInfo, level);
+                topTen.add(islandLevel);
+            }
+            if (!wasLoaded) {
+                removeIslandFromMemory(islandName);
             }
         }
         Collections.sort(topTen);
@@ -234,19 +196,20 @@ public class IslandLogic {
             ranks.clear();
             ranks.addAll(topTen);
         }
+        plugin.fireChangeEvent(sender, uSkyBlockEvent.Cause.RANK_UPDATED);
     }
 
-    private FileConfiguration readIslandConfig(File file) {
-        FileConfiguration config = new YamlConfiguration();
-        try {
-            config.load(file);
-        } catch (IOException | InvalidConfigurationException e) {
-            uSkyBlock.log(Level.WARNING, "Error reading island " + file.getName(), e);
-            return null;
+    private IslandLevel createIslandLevel(IslandInfo islandInfo, double level) {
+        String partyLeader = islandInfo.getLeader();
+        String partyLeaderName = PlayerUtil.getPlayerDisplayName(partyLeader);
+        List<String> memberList = new ArrayList<>(islandInfo.getMembers());
+        memberList.remove(partyLeader);
+        List<String> names = new ArrayList<>();
+        for (String name : memberList) {
+            names.add(PlayerUtil.getPlayerDisplayName(name));
         }
-        return config;
+        return new IslandLevel(islandInfo.getName(), partyLeaderName, names, level);
     }
-
 
     public synchronized IslandInfo createIsland(String location, String player) {
         IslandInfo info = getIslandInfo(location);
@@ -268,7 +231,7 @@ public class IslandLogic {
     public void renamePlayer(PlayerInfo playerInfo, Runnable completion, PlayerNameChangedEvent... changes) {
         String[] files = directoryIslands.list(FileUtil.createYmlFilenameFilter());
         RenamePlayerTask task = new RenamePlayerTask(playerInfo.locationForParty(), files, this, changes);
-        plugin.getAsyncExecutor().execute(plugin, task, completion, 0.8f, 20);
+        plugin.getAsyncExecutor().execute(plugin, task, completion, 0.8f, 1);
     }
 
     public void renamePlayer(String islandName, PlayerNameChangedEvent... changes) {
@@ -280,6 +243,15 @@ public class IslandLogic {
             if (!islandInfo.hasOnlineMembers()) {
                 removeIslandFromMemory(islandInfo.getName());
             }
+        }
+    }
+
+    public void updateRank(IslandInfo islandInfo, IslandScore score) {
+        synchronized (ranks) {
+            IslandLevel islandLevel = createIslandLevel(islandInfo, score.getScore());
+            ranks.remove(islandLevel);
+            ranks.add(islandLevel);
+            Collections.sort(ranks);
         }
     }
 }
