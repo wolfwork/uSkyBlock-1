@@ -18,6 +18,7 @@ import us.talabrek.ultimateskyblock.island.task.RenamePlayerTask;
 import us.talabrek.ultimateskyblock.player.PlayerInfo;
 import us.talabrek.ultimateskyblock.uSkyBlock;
 import us.talabrek.ultimateskyblock.util.FileUtil;
+import us.talabrek.ultimateskyblock.util.LocationUtil;
 import us.talabrek.ultimateskyblock.util.PlayerUtil;
 import us.talabrek.ultimateskyblock.util.TimeUtil;
 import us.talabrek.ultimateskyblock.uuid.PlayerNameChangedEvent;
@@ -29,6 +30,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static org.bukkit.Material.BEDROCK;
 
@@ -36,6 +39,7 @@ import static org.bukkit.Material.BEDROCK;
  * Responsible for island creation, locating locations, purging, clearing etc.
  */
 public class IslandLogic {
+    private static final Logger log = Logger.getLogger(IslandLogic.class.getName());
     private final uSkyBlock plugin;
     private final File directoryIslands;
 
@@ -49,7 +53,7 @@ public class IslandLogic {
         this.directoryIslands = directoryIslands;
     }
 
-    public IslandInfo getIslandInfo(String islandName) {
+    public synchronized IslandInfo getIslandInfo(String islandName) {
         if (!islands.containsKey(islandName)) {
             islands.put(islandName, new IslandInfo(islandName));
         }
@@ -75,10 +79,14 @@ public class IslandLogic {
     }
 
     public void clearIsland(Location loc, Runnable afterDeletion) {
+        log.fine("clearing island at " + loc);
         World skyBlockWorld = plugin.getWorld();
         ProtectedRegion region = WorldGuardHandler.getIslandRegionAt(loc);
         if (region != null) {
             WorldEditHandler.clearIsland(skyBlockWorld, region, afterDeletion);
+        } else {
+            uSkyBlock.log(Level.WARNING, "Trying to delete an island - with no WG region! (" + LocationUtil.asString(loc) + ")");
+            afterDeletion.run();
         }
     }
 
@@ -108,19 +116,7 @@ public class IslandLogic {
         return false;
     }
 
-    public void reloadIsland(Location location) {
-        reloadIsland(location2Name(location));
-    }
-
-    private String location2Name(Location location) {
-        return location != null ? ("" + location.getBlockX() + "," + location.getBlockZ()) : "null";
-    }
-
-    public void reloadIsland(String location) {
-        getIslandInfo(location).reload();
-    }
-
-    private void displayTopTen(final CommandSender sender) {
+    public void displayTopTen(final CommandSender sender) {
         int playerrank = 0;
         sender.sendMessage("\u00a7eDisplaying the top 10 islands:");
         synchronized (ranks) {
@@ -173,21 +169,25 @@ public class IslandLogic {
         }
     }
 
-    private void generateTopTen(final CommandSender sender) {
+    public void generateTopTen(final CommandSender sender) {
         List<IslandLevel> topTen = new ArrayList<>();
         final File folder = directoryIslands;
         final String[] listOfFiles = folder.list(FileUtil.createYmlFilenameFilter());
         for (String file : listOfFiles) {
             String islandName = FileUtil.getBasename(file);
-            boolean wasLoaded = islands.containsKey(islandName);
-            IslandInfo islandInfo = getIslandInfo(islandName);
-            double level = islandInfo != null ? islandInfo.getLevel() : 0;
-            if (islandInfo != null && level > 10) {
-                IslandLevel islandLevel = createIslandLevel(islandInfo, level);
-                topTen.add(islandLevel);
-            }
-            if (!wasLoaded) {
-                removeIslandFromMemory(islandName);
+            try {
+                boolean wasLoaded = islands.containsKey(islandName);
+                IslandInfo islandInfo = getIslandInfo(islandName);
+                double level = islandInfo != null ? islandInfo.getLevel() : 0;
+                if (islandInfo != null && level > 10) {
+                    IslandLevel islandLevel = createIslandLevel(islandInfo, level);
+                    topTen.add(islandLevel);
+                }
+                if (!wasLoaded) {
+                    islands.remove(islandName);
+                }
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.WARNING, "Error during top10 generation", e);
             }
         }
         Collections.sort(topTen);
@@ -223,7 +223,7 @@ public class IslandLogic {
         islands.remove(location);
     }
 
-    public void removeIslandFromMemory(String islandName) {
+    public synchronized void removeIslandFromMemory(String islandName) {
         getIslandInfo(islandName).save();
         islands.remove(islandName);
     }

@@ -2,8 +2,6 @@ package us.talabrek.ultimateskyblock.handler;
 
 import com.sk89q.worldedit.BlockVector;
 import com.sk89q.worldedit.Vector;
-import com.sk89q.worldedit.regions.CuboidRegion;
-import com.sk89q.worldedit.regions.Region;
 import com.sk89q.worldguard.bukkit.WorldGuardPlugin;
 import com.sk89q.worldguard.domains.DefaultDomain;
 import com.sk89q.worldguard.protection.ApplicableRegionSet;
@@ -26,6 +24,7 @@ import us.talabrek.ultimateskyblock.player.PlayerInfo;
 import us.talabrek.ultimateskyblock.uSkyBlock;
 
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.logging.Level;
 
 public class WorldGuardHandler {
@@ -41,14 +40,27 @@ public class WorldGuardHandler {
 
     public static boolean protectIsland(final CommandSender sender, final PlayerInfo pi) {
         uSkyBlock plugin = uSkyBlock.getInstance();
+        IslandInfo islandConfig = plugin.getIslandInfo(pi);
+        if (islandConfig == null) {
+            return false;
+        }
+        if (islandConfig.getLeader().isEmpty()) {
+            islandConfig.setupPartyLeader(pi.getPlayerName());
+            updateRegion(sender, islandConfig);
+            return true;
+        } else {
+            return protectIsland(plugin, sender, islandConfig);
+        }
+    }
+
+    public static boolean protectIsland(uSkyBlock plugin, CommandSender sender, IslandInfo islandConfig) {
         try {
             WorldGuardPlugin worldGuard = getWorldGuard();
             RegionManager regionManager = worldGuard.getRegionManager(uSkyBlock.getSkyBlockWorld());
-            IslandInfo islandConfig = plugin.getIslandInfo(pi);
             String regionName = islandConfig.getName() + "island";
-            if (pi.getIslandLocation() != null && noOrOldRegion(regionManager, regionName, islandConfig)) {
+            if (islandConfig != null && noOrOldRegion(regionManager, regionName, islandConfig)) {
                 ProtectedCuboidRegion region = setRegionFlags(sender, islandConfig);
-                final ApplicableRegionSet set = regionManager.getApplicableRegions(pi.getIslandLocation());
+                final ApplicableRegionSet set = regionManager.getApplicableRegions(islandConfig.getIslandLocation());
                 if (set.size() > 0) {
                     for (ProtectedRegion regions : set) {
                         if (!regions.getId().equalsIgnoreCase("__global__")) {
@@ -57,13 +69,14 @@ public class WorldGuardHandler {
                     }
                 }
                 regionManager.addRegion(region);
-                plugin.log(Level.INFO, "New protected region created for " + pi.getPlayerName() + "'s Island by " + sender.getName());
+                plugin.log(Level.INFO, "New protected region created for " + islandConfig.getLeader() + "'s Island by " + sender.getName());
                 regionManager.save();
                 islandConfig.setRegionVersion(VERSION);
                 return true;
             }
         } catch (Exception ex) {
-            plugin.log(Level.SEVERE, "ERROR: Failed to protect " + pi.getPlayerName() + "'s Island (" + sender.getName() + ")", ex);
+            String name = islandConfig != null ? islandConfig.getLeader() : "Unknown";
+            plugin.log(Level.SEVERE, "ERROR: Failed to protect " + name + "'s Island (" + sender.getName() + ")", ex);
         }
         return false;
     }
@@ -94,8 +107,10 @@ public class WorldGuardHandler {
         }
         region.setOwners(owners);
         region.setPriority(100);
-        region.setFlag(DefaultFlag.GREET_MESSAGE, DefaultFlag.GREET_MESSAGE.parseInput(getWorldGuard(), sender, "\u00a7d** You are entering a protected island area. (" + islandConfig.getLeader() + ")"));
-        region.setFlag(DefaultFlag.FAREWELL_MESSAGE, DefaultFlag.FAREWELL_MESSAGE.parseInput(getWorldGuard(), sender, "\u00a7d** You are leaving a protected island area. (" + islandConfig.getLeader() + ")"));
+        region.setFlag(DefaultFlag.GREET_MESSAGE,
+                DefaultFlag.GREET_MESSAGE.parseInput(getWorldGuard(), sender, "\u00a7d** You are entering \u00a7b" + islandConfig.getLeader() + "'s \u00a7disland."));
+        region.setFlag(DefaultFlag.FAREWELL_MESSAGE,
+                DefaultFlag.FAREWELL_MESSAGE.parseInput(getWorldGuard(), sender, "\u00a7d** You are leaving \u00a7b" + islandConfig.getLeader() + "'s \u00a7disland."));
         if (Settings.island_allowPvP) {
             region.setFlag(DefaultFlag.PVP, StateFlag.State.ALLOW);
         } else {
@@ -169,7 +184,7 @@ public class WorldGuardHandler {
                 regionManager.addRegion(region);
                 regionManager.save();
             }
-        } catch (StorageException|InvalidFlagFormat e) {
+        } catch (StorageException | InvalidFlagFormat e) {
             uSkyBlock.getInstance().log(Level.WARNING, "Error saving island region after removal of " + player);
         }
     }
@@ -230,14 +245,32 @@ public class WorldGuardHandler {
         }
     }
 
+    public static ApplicableRegionSet getIntersectingRegions(Location islandLocation) {
+        RegionManager regionManager = getWorldGuard().getRegionManager(islandLocation.getWorld());
+        ApplicableRegionSet applicableRegions = regionManager.getApplicableRegions(getIslandRegion(islandLocation));
+        for (Iterator<ProtectedRegion> iterator = applicableRegions.iterator(); iterator.hasNext(); ) {
+            if (iterator.next() instanceof GlobalProtectedRegion) {
+                iterator.remove();
+            }
+        }
+        return applicableRegions;
+    }
+
     public static boolean isIslandIntersectingSpawn(Location islandLocation) {
         int r = Settings.general_spawnSize;
-        ProtectedRegion spawn = new ProtectedCuboidRegion("spawn", new BlockVector(-r, 0, -r), new BlockVector(r, 0, r));
-        r = Settings.island_radius;
-        Vector islandCenter = new Vector(islandLocation.getBlockX(), 0, islandLocation.getBlockZ());
-        ProtectedCuboidRegion islandRegion = new ProtectedCuboidRegion("island",
-                new BlockVector(islandCenter.subtract(r, 0, r)),
-                new BlockVector(islandCenter.add(r, 0, r)));
+        if (r == 0) {
+            return false;
+        }
+        ProtectedRegion spawn = new ProtectedCuboidRegion("spawn", new BlockVector(-r, 0, -r), new BlockVector(r, 255, r));
+        ProtectedCuboidRegion islandRegion = getIslandRegion(islandLocation);
         return !islandRegion.getIntersectingRegions(Collections.singletonList(spawn)).isEmpty();
+    }
+
+    private static ProtectedCuboidRegion getIslandRegion(Location islandLocation) {
+        int r = Settings.island_radius;
+        Vector islandCenter = new Vector(islandLocation.getBlockX(), 0, islandLocation.getBlockZ());
+        return new ProtectedCuboidRegion(String.format("%d,%dIsland", islandCenter.getBlockX(), islandLocation.getBlockZ()),
+                new BlockVector(islandCenter.subtract(r, 0, r)),
+                new BlockVector(islandCenter.add(r, 255, r)));
     }
 }

@@ -23,11 +23,12 @@ public class AdminCommand extends AbstractCommandExecutor {
         TabCompleter biomeCompleter = new BiomeTabCompleter();
         addTab("oplayer", playerCompleter);
         addTab("player", allPlayerCompleter);
+        addTab("island", allPlayerCompleter);
         addTab("challenge", challengeCompleter);
         addTab("biome", biomeCompleter);
         add(new ReloadCommand());
         add(new ImportCommand());
-        add(new GenTopTenCommand());
+        add(new GenTopTenCommand(plugin));
         add(new RegisterIslandToPlayerCommand());
         add(new AdminChallengeCommand(plugin, challengeCompleter));
         add(new OrphanCommand());
@@ -41,5 +42,7 @@ public class AdminCommand extends AbstractCommandExecutor {
             }
         });
         add(new FlatlandFixCommand(plugin));
+        add(new DebugCommand(plugin));
+        add(new WGCommand(plugin));
     }
 }
