@@ -7,10 +7,15 @@ import us.talabrek.ultimateskyblock.uSkyBlock;
 
 import java.io.File;
 import java.io.IOException;
+import java.text.MessageFormat;
+import java.util.Arrays;
+import java.util.Date;
 import java.util.Map;
 import java.util.logging.FileHandler;
+import java.util.logging.Formatter;
 import java.util.logging.Handler;
 import java.util.logging.Level;
+import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
@@ -21,11 +26,8 @@ public class DebugCommand extends CompositeUSBCommand {
     public static final Logger log = Logger.getLogger("us.talabrek.ultimateskyblock");
     private static Handler logHandler = null;
 
-    private final uSkyBlock plugin;
-
     public DebugCommand(final uSkyBlock plugin) {
         super("debug", "usb.admin", "control debugging");
-        this.plugin = plugin;
         add(new AbstractUSBCommand("setlevel", null, "level", "set debug-level") {
             @Override
             public boolean execute(CommandSender sender, String alias, Map<String, Object> data, String... args) {
@@ -64,43 +66,69 @@ public class DebugCommand extends CompositeUSBCommand {
         String debugLevel = plugin.getConfig().getString("options.advanced.debugLevel", null);
         if (debugLevel != null) {
             setLogLevel(plugin.getServer().getConsoleSender(), debugLevel);
-            enableLogging(plugin.getServer().getConsoleSender(), plugin);
         }
     }
 
-    private void setLogLevel(CommandSender sender, String arg) {
+    public static void setLogLevel(CommandSender sender, String arg) {
         try {
             Level level = Level.parse(arg.toUpperCase());
             log.setLevel(level);
+            uSkyBlock.getInstance().getLogger().setLevel(level);
             sender.sendMessage("\u00a7eSet debug-level to " + level);
+            enableLogging(sender, uSkyBlock.getInstance());
         } catch (Exception e) {
-            sender.sendMessage("\u00a74Invalid argument, try FINE, FINEST, DEBUG, INFO");
+            sender.sendMessage("\u00a74Invalid argument, try INFO, FINE, FINER, FINEST");
         }
     }
 
-    private void disableLogging(CommandSender sender) {
-        log.removeHandler(logHandler);
-        logHandler.close();
-        sender.sendMessage("\u00a7eLogging disabled!");
+    public static void disableLogging(CommandSender sender) {
+        if (logHandler != null) {
+            log.removeHandler(logHandler);
+            uSkyBlock.getInstance().getLogger().removeHandler(logHandler);
+            logHandler.close();
+            if (sender != null) {
+                sender.sendMessage("\u00a7eLogging disabled!");
+            }
+        }
         logHandler = null;
     }
 
-    private void enableLogging(CommandSender sender, uSkyBlock plugin) {
+    public static void enableLogging(CommandSender sender, uSkyBlock plugin) {
         if (logHandler != null) {
             log.removeHandler(logHandler);
+            plugin.getLogger().removeHandler(logHandler);
         }
         File logFolder = new File(plugin.getDataFolder(), "logs");
         logFolder.mkdirs();
         try {
             String logFile = logFolder.toString() + File.separator + "uskyblock.%u.log";
             logHandler = new FileHandler(logFile, true);
-            logHandler.setFormatter(new SimpleFormatter());
+            logHandler.setFormatter(new SingleLineFormatter());
             log.addHandler(logHandler);
+            plugin.getLogger().addHandler(logHandler);
             log.log(log.getLevel(), uSkyBlock.stripFormatting(plugin.getVersionInfo()));
             sender.sendMessage("\u00a7eLogging to " + logFile);
         } catch (IOException e) {
             log.log(Level.WARNING, "Unable to enable logging", e);
             sender.sendMessage("\u00a74Unable to enable logging: " + e.getMessage());
+        }
+    }
+
+    public static class SingleLineFormatter extends Formatter {
+        @Override
+        public String format(LogRecord record) {
+            try {
+                return String.format("%1$d %2$tY-%2$tm-%2$td %2$tH:%2$tM:%2$tS.%2$tL %3$s %4$s %5$s\n",
+                        record.getMillis(), new Date(record.getMillis()), record.getSourceClassName(),
+                        record.getSourceMethodName(),
+                        MessageFormat.format(record.getMessage(), record.getParameters()));
+            } catch (IllegalArgumentException e) {
+                return String.format("%1$d %2$tY-%2$tm-%2$td %2$tH:%2$tM:%2$tS.%2$tL %3$s %4$s %5$s %6$s\n",
+                        record.getMillis(), new Date(record.getMillis()), record.getSourceClassName(),
+                        record.getSourceMethodName(),
+                        record.getMessage(),
+                        record.getParameters() != null ? Arrays.toString(record.getParameters()) : "");
+            }
         }
     }
 }

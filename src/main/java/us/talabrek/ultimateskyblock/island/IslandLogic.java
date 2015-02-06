@@ -61,7 +61,7 @@ public class IslandLogic {
     }
 
     public IslandInfo getIslandInfo(PlayerInfo playerInfo) {
-        if (playerInfo.getHasIsland()) {
+        if (playerInfo != null && playerInfo.getHasIsland()) {
             return getIslandInfo(playerInfo.locationForParty());
         }
         return null;
@@ -79,13 +79,13 @@ public class IslandLogic {
     }
 
     public void clearIsland(Location loc, Runnable afterDeletion) {
-        log.fine("clearing island at " + loc);
+        log.log(Level.FINE, "clearing island at {0}", loc);
         World skyBlockWorld = plugin.getWorld();
         ProtectedRegion region = WorldGuardHandler.getIslandRegionAt(loc);
         if (region != null) {
             WorldEditHandler.clearIsland(skyBlockWorld, region, afterDeletion);
         } else {
-            uSkyBlock.log(Level.WARNING, "Trying to delete an island - with no WG region! (" + LocationUtil.asString(loc) + ")");
+            log.log(Level.WARNING, "Trying to delete an island - with no WG region! ({0})", LocationUtil.asString(loc));
             afterDeletion.run();
         }
     }
@@ -187,7 +187,7 @@ public class IslandLogic {
                     islands.remove(islandName);
                 }
             } catch (Exception e) {
-                plugin.getLogger().log(Level.WARNING, "Error during top10 generation", e);
+                plugin.getLogger().log(Level.WARNING, "Error during rank generation", e);
             }
         }
         Collections.sort(topTen);
