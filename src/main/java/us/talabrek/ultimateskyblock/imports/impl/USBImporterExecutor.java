@@ -3,7 +3,9 @@ package us.talabrek.ultimateskyblock.imports.impl;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import us.talabrek.ultimateskyblock.imports.USBImporter;
+import us.talabrek.ultimateskyblock.imports.fixuuidleader.UUIDLeaderImporter;
 import us.talabrek.ultimateskyblock.imports.name2uuid.Name2UUIDImporter;
+import us.talabrek.ultimateskyblock.imports.update.USBUpdateImporter;
 import us.talabrek.ultimateskyblock.imports.wolfwork.WolfWorkUSBImporter;
 import us.talabrek.ultimateskyblock.uSkyBlock;
 
@@ -14,6 +16,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.ServiceLoader;
 import java.util.logging.Level;
+
+import static us.talabrek.ultimateskyblock.util.I18nUtil.tr;
 
 /**
  * Delegates and batches the import.
@@ -41,6 +45,8 @@ public class USBImporterExecutor {
         if (importers == null) {
             importers = new ArrayList<>();
             importers.add(new WolfWorkUSBImporter());
+            importers.add(new UUIDLeaderImporter());
+            importers.add(new USBUpdateImporter());
             //importers.add(new Name2UUIDImporter());
             ServiceLoader serviceLoader = ServiceLoader.load(USBImporter.class, getClass().getClassLoader());
             for (Iterator<USBImporter> it = serviceLoader.iterator(); it.hasNext(); ) {
@@ -65,7 +71,7 @@ public class USBImporterExecutor {
         }
         final USBImporter importer = getImporter(name);
         if (importer == null) {
-            sender.sendMessage("\u00a74No importer named \u00a7e" + name + "\u00a74 found");
+            sender.sendMessage(tr("\u00a74No importer named \u00a7e{0}\u00a74 found", name));
             return;
         }
         Bukkit.getServer().getScheduler().runTaskAsynchronously(plugin, new Runnable() {
@@ -115,7 +121,7 @@ public class USBImporterExecutor {
                     doImport(sender, importer, files, offset + chunkSize, chunkSize, delay);
                 } else {
                     importer.completed(plugin, countSuccess, countFailed);
-                    sender.sendMessage("\u00a7eConverted " + countSuccess + "/" + (countSuccess + countFailed) + " players");
+                    sender.sendMessage(tr("\u00a7eConverted " + countSuccess + "/" + (countSuccess + countFailed) + " players"));
                 }
             }
         }, delay);

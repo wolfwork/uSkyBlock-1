@@ -3,18 +3,17 @@ package us.talabrek.ultimateskyblock.island;
 import com.sk89q.worldedit.Vector;
 import com.sk89q.worldedit.regions.CuboidRegion;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
-import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import us.talabrek.ultimateskyblock.Settings;
 import us.talabrek.ultimateskyblock.api.IslandLevel;
+import us.talabrek.ultimateskyblock.api.IslandRank;
 import us.talabrek.ultimateskyblock.api.event.uSkyBlockEvent;
 import us.talabrek.ultimateskyblock.handler.WorldEditHandler;
 import us.talabrek.ultimateskyblock.handler.WorldGuardHandler;
 import us.talabrek.ultimateskyblock.handler.task.WorldEditClearTask;
-import us.talabrek.ultimateskyblock.island.task.RenamePlayerTask;
 import us.talabrek.ultimateskyblock.player.PlayerInfo;
 import us.talabrek.ultimateskyblock.uSkyBlock;
 import us.talabrek.ultimateskyblock.util.FileUtil;
@@ -34,6 +33,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static org.bukkit.Material.BEDROCK;
+import static us.talabrek.ultimateskyblock.util.I18nUtil.tr;
 
 /**
  * Responsible for island creation, locating locations, purging, clearing etc.
@@ -44,6 +44,7 @@ public class IslandLogic {
     private final File directoryIslands;
 
     private final Map<String, IslandInfo> islands = new ConcurrentHashMap<>();
+    private final boolean showMembers;
 
     private volatile long lastGenerate = 0;
     private final List<IslandLevel> ranks = new ArrayList<>();
@@ -51,9 +52,13 @@ public class IslandLogic {
     public IslandLogic(uSkyBlock plugin, File directoryIslands) {
         this.plugin = plugin;
         this.directoryIslands = directoryIslands;
+        showMembers = plugin.getConfig().getBoolean("options.island.topTenShowMembers", true);
     }
 
     public synchronized IslandInfo getIslandInfo(String islandName) {
+        if (islandName == null || islandName.isEmpty()) {
+            return null;
+        }
         if (!islands.containsKey(islandName)) {
             islands.put(islandName, new IslandInfo(islandName));
         }
@@ -83,6 +88,12 @@ public class IslandLogic {
         World skyBlockWorld = plugin.getWorld();
         ProtectedRegion region = WorldGuardHandler.getIslandRegionAt(loc);
         if (region != null) {
+            for (Player player : WorldEditHandler.getPlayersInRegion(plugin.getWorld(), region)) {
+                if (player != null && player.isOnline() && !player.isFlying()) {
+                    player.sendMessage(tr("\u00a7cThe island you are on is being deleted! Sending you to spawn."));
+                    plugin.spawnTeleport(player);
+                }
+            }
             WorldEditHandler.clearIsland(skyBlockWorld, region, afterDeletion);
         } else {
             log.log(Level.WARNING, "Trying to delete an island - with no WG region! ({0})", LocationUtil.asString(loc));
@@ -116,34 +127,45 @@ public class IslandLogic {
         return false;
     }
 
-    public void displayTopTen(final CommandSender sender) {
-        int playerrank = 0;
-        sender.sendMessage("\u00a7eDisplaying the top 10 islands:");
+    public void displayTopTen(final CommandSender sender, int page) {
         synchronized (ranks) {
+            int maxpage = (( ranks.size()-1) / 10) + 1;
+            if (page > maxpage) {
+                page = maxpage;
+            }
+            if (page < 1) {
+                page = 1;
+            }
+            sender.sendMessage(tr("\u00a7eWALL OF FAME (page {0} of {1}):", page, maxpage));
             if (ranks == null || ranks.isEmpty()) {
-                sender.sendMessage("\u00a74Top ten list is empty! (perhaps the generation failed?)");
+                sender.sendMessage(tr("\u00a74Top ten list is empty! (perhaps the generation failed?)"));
             }
             int place = 1;
             String playerName = sender instanceof Player ? ((Player)sender).getDisplayName() : sender.getName();
-            for (final IslandLevel level : ranks.subList(0, Math.min(ranks.size(), 10))) {
+            PlayerInfo playerInfo = plugin.getPlayerInfo(playerName);
+            IslandRank rank = null;
+            if (playerInfo != null && playerInfo.getHasIsland()) {
+                rank = getRank(playerInfo.locationForParty());
+            }
+            int offset = (page-1) * 10;
+            place += offset;
+            for (final IslandLevel level : ranks.subList(offset, Math.min(ranks.size(), 10*page))) {
                 String members = "";
-                if (!level.getMembers().isEmpty()) {
+                if (showMembers && !level.getMembers().isEmpty()) {
                     members = Arrays.toString(level.getMembers().toArray(new String[level.getMembers().size()]));
                 }
-                sender.sendMessage(String.format("\u00a7a#%2d \u00a77(%5.2f): %s \u00a77%s", place, level.getScore(),
+                sender.sendMessage(String.format(tr("\u00a7a#%2d \u00a77(%5.2f): \u00a7e%s \u00a77%s"), place, level.getScore(),
                         level.getLeaderName(), members));
-                if (level.getMembers().contains(sender.getName()) || level.getLeaderName().equals(playerName)) {
-                    playerrank = place;
-                }
                 place++;
             }
+            if (rank != null) {
+                sender.sendMessage(tr("\u00a7eYour rank is: \u00a7f{0}", rank.getRank()));
+            }
         }
-        if (playerrank > 0) {
-            sender.sendMessage("\u00a7eYour rank is: " + ChatColor.WHITE + playerrank);
-        }
+
     }
 
-    public void showTopTen(final CommandSender sender) {
+    public void showTopTen(final CommandSender sender, final int page) {
         long t = System.currentTimeMillis();
         if (t > (lastGenerate + (Settings.island_topTenTimeout*60000)) || sender.hasPermission("usb.admin.topten")) {
             lastGenerate = t;
@@ -151,11 +173,11 @@ public class IslandLogic {
                 @Override
                 public void run() {
                     generateTopTen(sender);
-                    displayTopTen(sender);
+                    displayTopTen(sender, page);
                 }
             });
         } else {
-            displayTopTen(sender);
+            displayTopTen(sender, page);
         }
     }
 
@@ -172,7 +194,7 @@ public class IslandLogic {
     public void generateTopTen(final CommandSender sender) {
         List<IslandLevel> topTen = new ArrayList<>();
         final File folder = directoryIslands;
-        final String[] listOfFiles = folder.list(FileUtil.createYmlFilenameFilter());
+        final String[] listOfFiles = folder.list(FileUtil.createIslandFilenameFilter());
         for (String file : listOfFiles) {
             String islandName = FileUtil.getBasename(file);
             try {
@@ -206,7 +228,10 @@ public class IslandLogic {
         memberList.remove(partyLeader);
         List<String> names = new ArrayList<>();
         for (String name : memberList) {
-            names.add(PlayerUtil.getPlayerDisplayName(name));
+            String displayName = PlayerUtil.getPlayerDisplayName(name);
+            if (displayName != null) {
+                names.add(displayName);
+            }
         }
         return new IslandLevel(islandInfo.getName(), partyLeaderName, names, level);
     }
@@ -224,22 +249,25 @@ public class IslandLogic {
     }
 
     public synchronized void removeIslandFromMemory(String islandName) {
-        getIslandInfo(islandName).save();
         islands.remove(islandName);
     }
 
-    public void renamePlayer(PlayerInfo playerInfo, Runnable completion, PlayerNameChangedEvent... changes) {
-        String[] files = directoryIslands.list(FileUtil.createYmlFilenameFilter());
-        RenamePlayerTask task = new RenamePlayerTask(playerInfo.locationForParty(), files, this, changes);
-        plugin.getAsyncExecutor().execute(plugin, task, completion, 0.8f, 1);
+    public void renamePlayer(PlayerInfo playerInfo, Runnable completion, PlayerNameChangedEvent change) {
+        List<String> islands = new ArrayList<>();
+        islands.add(playerInfo.locationForParty());
+        islands.addAll(playerInfo.getBannedFrom());
+        for (String islandName : islands) {
+            renamePlayer(islandName, change);
+        }
+        if (completion != null) {
+            completion.run();
+        }
     }
 
-    public void renamePlayer(String islandName, PlayerNameChangedEvent... changes) {
+    public void renamePlayer(String islandName, PlayerNameChangedEvent e) {
         IslandInfo islandInfo = getIslandInfo(islandName);
         if (islandInfo != null) {
-            for (PlayerNameChangedEvent e : changes) {
-                islandInfo.renamePlayer(e.getPlayer(), e.getOldName());
-            }
+            islandInfo.renamePlayer(e.getPlayer(), e.getOldName());
             if (!islandInfo.hasOnlineMembers()) {
                 removeIslandFromMemory(islandInfo.getName());
             }
@@ -253,5 +281,22 @@ public class IslandLogic {
             ranks.add(islandLevel);
             Collections.sort(ranks);
         }
+    }
+
+    public boolean hasIsland(Location loc) {
+        return loc == null || new File(directoryIslands, LocationUtil.getIslandName(loc) + ".yml").exists();
+    }
+
+    public IslandRank getRank(String islandName) {
+        if (ranks != null) {
+            ArrayList<IslandLevel> rankList = new ArrayList<>(ranks);
+            for (int i = 0; i < rankList.size(); i++) {
+                IslandLevel level = rankList.get(i);
+                if (level.getIslandName().equalsIgnoreCase(islandName)) {
+                    return new IslandRank(level, i+1);
+                }
+            }
+        }
+        return null;
     }
 }

@@ -11,7 +11,7 @@ commands:
         description: Commands to use your island
         aliases: [is, skyblock, sb]
         usage:  |
-             /island [restart/sethome/info/lock/unlock/top/party]
+             /island [restart/sethome/info/level/lock/unlock/top/party]
     usb:
         description: admin commands
         aliases: [dev]
@@ -30,6 +30,8 @@ permissions:
           usb.island.create:
             description: Let the player use the /island command
           usb.island.info:
+            description: Let the player check their island info(level make-up)
+          usb.island.level:
             description: Let the player check their island level
           usb.island.topten:
             description: Let the player see the top ten list
@@ -61,6 +63,10 @@ permissions:
             description: Let the player change their islands biome to MUSHROOM_ISLAND.
           usb.biome.taiga:
             description: Let the player change their islands biome to TAIGA.
+          usb.biome.plains:
+            description: Let the player change their islands biome to PLAINS.
+          usb.biome.extreme_hills:
+            description: Let the player change their islands biome to EXTREME_HILLS.
       usb.extra.*:
         children:
           usb.extra.hunger:
@@ -81,8 +87,6 @@ permissions:
             description: Let a player invite other players to join a party
           usb.party.kick:
             description: Let a player kick other players
-          usb.party.makeleader:
-            description: Let a player make another player leader of the party
           usb.party.join:
             description: Let a player join another player's party
       usb.mod.*:
@@ -93,8 +97,6 @@ permissions:
             description: Let a player try to add protection to all unprotected islands
           usb.mod.topten:
             description: Let a player manually update the top ten list
-          usb.mod.orphan:
-            description: Let a player check and modify the orphan list
           usb.mod.goto:
             description: Let a player teleport to another player's island
           usb.mod.party:
@@ -105,6 +107,8 @@ permissions:
             description: Let a player bypass the cooldowns for the /island info and /island restart commands
           usb.mod.bypassprotection:
             description: Let a player bypass the built in island protection
+          usb.mod.bypassteleport:
+            description: Let a player bypass the teleport wait time
           usb.mod.setbiome:
             description: Let a player set another players biome.
       usb.admin.*:
@@ -125,3 +129,5 @@ permissions:
             description: Let a player import other-formats (players, islands, orphans).
           usb.admin.topten:
             description: Let a player force top-ten regeneration.
+          usb.admin.orphan:
+            description: Let a player check and modify the orphan list

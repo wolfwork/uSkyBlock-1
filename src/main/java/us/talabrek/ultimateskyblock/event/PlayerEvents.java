@@ -1,8 +1,12 @@
 package us.talabrek.ultimateskyblock.event;
 
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.entity.EnderPearl;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.entity.ThrownPotion;
@@ -10,6 +14,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockPhysicsEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.*;
 import org.bukkit.event.player.*;
 import org.bukkit.inventory.ItemStack;
@@ -17,9 +23,13 @@ import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.projectiles.ProjectileSource;
 import us.talabrek.ultimateskyblock.*;
 import us.talabrek.ultimateskyblock.handler.VaultHandler;
+import us.talabrek.ultimateskyblock.handler.WorldGuardHandler;
 import us.talabrek.ultimateskyblock.island.IslandInfo;
+import us.talabrek.ultimateskyblock.player.PlayerInfo;
 
 import java.util.*;
+
+import static us.talabrek.ultimateskyblock.util.I18nUtil.tr;
 
 public class PlayerEvents implements Listener {
     private static final Set<EntityDamageEvent.DamageCause> FIRE_TRAP = new HashSet<>(
@@ -40,8 +50,12 @@ public class PlayerEvents implements Listener {
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onPlayerJoin(final PlayerJoinEvent event) {
-        if (plugin.isSkyWorld(event.getPlayer().getWorld())) {
-            plugin.loadPlayerData(event.getPlayer());
+        Player player = event.getPlayer();
+        if (plugin.isSkyWorld(player.getWorld())) {
+            PlayerInfo playerInfo = plugin.loadPlayerData(player);
+            if (playerInfo != null && !playerInfo.getHasIsland() && player.isFlying()) {
+                uSkyBlock.getInstance().spawnTeleport(player);
+            }
         }
     }
 
@@ -101,13 +115,60 @@ public class PlayerEvents implements Listener {
                 && player.getItemInHand().getType() == Material.BUCKET
                 && block != null
                 && block.getType() == Material.OBSIDIAN
-                && !plugin.testForObsidian(block)) {
+                && !testForObsidian(block)) {
             obsidianClick.put(player.getUniqueId(), now);
-            player.sendMessage("\u00a7eChanging your obsidian back into lava. Be careful!");
+            player.sendMessage(tr("\u00a7eChanging your obsidian back into lava. Be careful!"));
             inventory.setItem(inventory.getHeldItemSlot(), new ItemStack(Material.LAVA_BUCKET, 1));
             player.updateInventory();
             block.setType(Material.AIR);
             event.setCancelled(true); // Don't execute the click anymore (since that would re-place the lava).
+        }
+    }
+    /**
+     * Tests for more than one obsidian close by.
+     */
+    public boolean testForObsidian(final Block block) {
+        for (int x = -3; x <= 3; ++x) {
+            for (int y = -3; y <= 3; ++y) {
+                for (int z = -3; z <= 3; ++z) {
+                    final Block testBlock = block.getWorld().getBlockAt(block.getX() + x, block.getY() + y, block.getZ() + z);
+                    if ((x != 0 || y != 0 || z != 0) && testBlock.getType() == Material.OBSIDIAN) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    @EventHandler
+    public void onLavaReplace(BlockPlaceEvent event) {
+        if (event.getPlayer() == null || !plugin.isSkyWorld(event.getPlayer().getWorld())) {
+            return; // Skip
+        }
+        if (event.getBlockReplacedState() != null &&
+                isLavaSource(event.getBlockReplacedState().getType(), event.getBlockReplacedState().getRawData())) {
+            plugin.notifyPlayer(event.getPlayer(), tr("\u00a74It's a bad idea to replace your lava!"));
+            event.setCancelled(true);
+        }
+    }
+
+    private boolean isLavaSource(Material type, byte data) {
+        return (type == Material.STATIONARY_LAVA || type == Material.LAVA) && data == 0;
+    }
+
+    @EventHandler
+    public void onLavaAbsorption(EntityChangeBlockEvent event) {
+        if (!plugin.isSkyWorld(event.getBlock().getWorld())) {
+            return;
+        }
+        if (isLavaSource(event.getBlock().getType(), event.getBlock().getData())) {
+            if (event.getTo() != Material.LAVA && event.getTo() != Material.STATIONARY_LAVA) {
+                event.setCancelled(true);
+                ItemStack item = new ItemStack(event.getTo(), 1, event.getData());
+                Location above = event.getBlock().getLocation().add(0, 1, 0);
+                event.getBlock().getWorld().dropItemNaturally(above, item);
+            }
         }
     }
 
@@ -139,7 +200,8 @@ public class PlayerEvents implements Listener {
         if (event.getDamager() instanceof Player) {
             Player p1 = (Player) event.getDamager();
             cancelMemberDamage(p1, p2, event);
-        } else if (event.getDamager() instanceof Projectile) {
+        } else if (event.getDamager() instanceof Projectile
+                && !(event.getDamager() instanceof EnderPearl)) {
             ProjectileSource shooter = ((Projectile) event.getDamager()).getShooter();
             if (shooter instanceof Player) {
                 Player p1 = (Player) shooter;
@@ -164,6 +226,19 @@ public class PlayerEvents implements Listener {
         }
         if (plugin.isSkyWorld(event.getPlayer().getWorld())) {
             event.setRespawnLocation(plugin.getSkyBlockWorld().getSpawnLocation());
+        }
+    }
+
+    @EventHandler
+    public void onTeleport(PlayerTeleportEvent event) {
+        if (!plugin.isSkyWorld(event.getTo().getWorld())) {
+            return;
+        }
+        Player player = event.getPlayer();
+        IslandInfo islandInfo = uSkyBlock.getInstance().getIslandInfo(WorldGuardHandler.getIslandNameAt(event.getTo()));
+        if (islandInfo != null && islandInfo.isBanned(player.getName())) {
+            event.setCancelled(true);
+            player.sendMessage(tr("\u00a74That player has forbidden you from teleporting to their island."));
         }
     }
 }

@@ -1,6 +1,10 @@
 package us.talabrek.ultimateskyblock.island;
 
-import org.bukkit.*;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Location;
+import org.bukkit.OfflinePlayer;
+import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -19,15 +23,21 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.text.DateFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
 
 import static us.talabrek.ultimateskyblock.util.FileUtil.readConfig;
+import static us.talabrek.ultimateskyblock.util.I18nUtil.tr;
 
 /**
  * Data object for an island
  */
 public class IslandInfo {
+    private static final int YML_VERSION = 1;
     private static File directory = new File(".");
 
     private final File file;
@@ -41,6 +51,21 @@ public class IslandInfo {
         if (file.exists()) {
             readConfig(config, file);
         }
+        if (config.getInt("version", 0) < YML_VERSION) {
+            updateConfig();
+        }
+    }
+
+    private void updateConfig() {
+        int currentVersion = config.getInt("version", 0);
+        if (currentVersion < 1) {
+            // add ban-info to the individual player-configs.
+            for (String banned : getBans()) {
+                banPlayerInfo(banned);
+            }
+        }
+        config.set("version", YML_VERSION);
+        save();
     }
 
     public static void setDirectory(File dir) {
@@ -54,6 +79,7 @@ public class IslandInfo {
         config.set("general.warpLocationZ", 0);
         config.set("general.warpActive", false);
         config.set("log.logPos", 1);
+        config.set("version", YML_VERSION);
         setupPartyLeader(leader);
         sendMessageToIslandGroup("The island has been created.");
     }
@@ -213,11 +239,11 @@ public class IslandInfo {
     public void lock(Player player) {
         WorldGuardHandler.islandLock(player, name);
         config.set("general.locked", true);
-        sendMessageToIslandGroup(player.getName() + " locked the island.");
+        sendMessageToIslandGroup("\u00a7b"+player.getName() + "\u00a7d locked the island.");
         if (hasWarp()) {
             config.set("general.warpActive", false);
-            player.sendMessage("\u00a74Since your island is locked, your incoming warp has been deactivated.");
-            sendMessageToIslandGroup(player.getName() + " deactivated the island warp.");
+            player.sendMessage(tr("\u00a74Since your island is locked, your incoming warp has been deactivated."));
+            sendMessageToIslandGroup(tr("\u00a7b{0}\u00a7d deactivated the island warp.", player.getName()));
         }
         save();
     }
@@ -225,7 +251,7 @@ public class IslandInfo {
     public void unlock(Player player) {
         WorldGuardHandler.islandUnlock(player, name);
         config.set("general.locked", false);
-        sendMessageToIslandGroup(player.getName() + " unlocked the island.");
+        sendMessageToIslandGroup("\u00a7b"+player.getName() + "\u00a7d unlocked the island.");
         save();
     }
 
@@ -260,6 +286,14 @@ public class IslandInfo {
         }
         config.set("banned.list", stringList);
         save();
+        banPlayerInfo(player);
+    }
+
+    private void banPlayerInfo(String player) {
+        PlayerInfo playerInfo = uSkyBlock.getInstance().getPlayerInfo(player);
+        if (playerInfo != null) {
+            playerInfo.banFromIsland(name);
+        }
     }
 
     public void unbanPlayer(String player) {
@@ -269,6 +303,14 @@ public class IslandInfo {
         }
         config.set("banned.list", stringList);
         save();
+        unbanPlayerInfo(player);
+    }
+
+    private void unbanPlayerInfo(String player) {
+        PlayerInfo playerInfo = uSkyBlock.getInstance().getPlayerInfo(player);
+        if (playerInfo != null) {
+            playerInfo.unbanFromIsland(name);
+        }
     }
 
     public List<String> getBans() {
@@ -287,7 +329,7 @@ public class IslandInfo {
         config.set("party.members." + playername, null);
         config.set("party.currentSize", getPartySize() - 1);
         save();
-        sendMessageToIslandGroup(playername + " has been removed from the island group.");
+        sendMessageToIslandGroup("\u00a7b" +playername + "\u00a7d has been removed from the island group.");
     }
 
     public void setLevel(double score) {
@@ -296,7 +338,7 @@ public class IslandInfo {
     }
 
     public double getLevel() {
-        return config.getDouble("general.level");
+        return getMembers().isEmpty() ? 0 : config.getDouble("general.level");
     }
 
     public void setRegionVersion(int version) {
@@ -378,19 +420,20 @@ public class IslandInfo {
         boolean dirty = false;
         if (section != null) {
             String uuid = section.getString("uuid", null);
-            if (uuid == null || uuid.equals(player.getUniqueId())) {
+            if (uuid == null || uuid.equals(UUIDUtil.asString(player.getUniqueId()))) {
                 section = members.createSection(newName, section.getValues(true));
                 section.set("uuid", UUIDUtil.asString(player.getUniqueId()));
+                members.set(oldName, null); // remove existing section
                 dirty = true;
             } else {
                 throw new IllegalStateException("Member " + oldName + " has a different UUID than " + player);
             }
         }
         if (isLeader(oldName)) {
-            String uuid = section.getString("party.leader-uuid", null);
-            if (uuid == null || uuid.equals(player.getUniqueId())) {
+            String uuid = config.getString("party.leader-uuid", null);
+            if (uuid == null || uuid.equals(UUIDUtil.asString(player.getUniqueId()))) {
                 config.set("party.leader", newName);
-                config.set("party.leader-uuid", player.getUniqueId());
+                config.set("party.leader-uuid", UUIDUtil.asString(player.getUniqueId()));
                 dirty = true;
             } else {
                 throw new IllegalStateException("Leader " + oldName + " has a different UUID than " + player);
@@ -404,6 +447,7 @@ public class IslandInfo {
             dirty = true;
         }
         if (dirty) {
+            WorldGuardHandler.updateRegion(player, this);
             save();
         }
     }
@@ -427,5 +471,9 @@ public class IslandInfo {
             }
         }
         return false;
+    }
+
+    public boolean contains(Location loc) {
+        return name.equalsIgnoreCase(WorldGuardHandler.getIslandNameAt(loc));
     }
 }

@@ -1,5 +1,6 @@
 package us.talabrek.ultimateskyblock.util;
 
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -19,6 +20,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
@@ -105,11 +107,10 @@ public enum FileUtil {;
             YamlConfiguration config = new YamlConfiguration();
             try {
                 // read from datafolder!
-                File configFile = new File(getDataFolder(), configName);
-                // TODO: 09/12/2014 - R4zorax: Also replace + backup if jar-version is newer than local version
+                File configFile = getConfigFile(configName);
                 YamlConfiguration configJar = new YamlConfiguration();
                 readConfig(config, configFile);
-                readConfig(configJar, FileUtil.class.getClassLoader().getResourceAsStream(configName));
+                readConfig(configJar, getResource(configName));
                 if (!configFile.exists() || config.getInt("version", 0) < configJar.getInt("version", 0)) {
                     if (configFile.exists()) {
                         File backupFolder = new File(getDataFolder(), "backup");
@@ -120,14 +121,14 @@ public enum FileUtil {;
                                 Paths.get(new File(backupFolder, bakFile).toURI()),
                                 StandardCopyOption.REPLACE_EXISTING);
                         if (allwaysOverwrite.contains(configName)) {
-                            FileUtil.copy(FileUtil.class.getClassLoader().getResourceAsStream(configName), configFile);
+                            FileUtil.copy(getResource(configName), configFile);
                             config = configJar;
                         } else {
                             config = mergeConfig(configJar, config);
                             config.save(configFile);
                         }
                     } else {
-                        FileUtil.copy(FileUtil.class.getClassLoader().getResourceAsStream(configName), configFile);
+                        FileUtil.copy(getResource(configName), configFile);
                         config = configJar;
                     }
                 }
@@ -137,6 +138,26 @@ public enum FileUtil {;
             configFiles.put(configName, config);
         }
         return configFiles.get(configName);
+    }
+
+    private static InputStream getResource(String configName) {
+        String baseName = getBasename(configName);
+        String resourceName = baseName + "_" + Locale.getDefault().getLanguage() + configName.substring(baseName.length());
+        ClassLoader loader = FileUtil.class.getClassLoader();
+        InputStream resourceAsStream = loader.getResourceAsStream(resourceName);
+        if (resourceAsStream != null) {
+            return resourceAsStream;
+        }
+        return loader.getResourceAsStream(configName);
+    }
+
+    private static File getConfigFile(String configName) {
+        String baseName = getBasename(configName);
+        File file = new File(getDataFolder(), baseName + "_" + Locale.getDefault().getLanguage() + configName.substring(baseName.length()));
+        if (file.exists()) {
+            return file;
+        }
+        return new File(getDataFolder(), configName);
     }
 
     private static boolean isPrimaryConfig(String configName) {
@@ -159,6 +180,17 @@ public enum FileUtil {;
         dest.options().copyDefaults(true);
         src.options().header("Merge from between jar-file v" + version + " and existing config v" + existing);
         dest.set("version", version);
+        ConfigurationSection forceSection = src.getConfigurationSection("force-replace");
+        if (forceSection != null) {
+            for (String key : forceSection.getKeys(false)) {
+                Object def = forceSection.get(key, null);
+                Object value = dest.get(key, def);
+                if (def != null && def.equals(value)) {
+                    dest.set(key, def);
+                }
+            }
+        }
+        dest.set("force-replace", null);
         return dest;
     }
 
@@ -173,4 +205,5 @@ public enum FileUtil {;
             readConfig(e.getValue(), configFile);
         }
     }
+
 }

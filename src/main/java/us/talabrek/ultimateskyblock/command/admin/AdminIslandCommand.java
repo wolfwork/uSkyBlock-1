@@ -14,6 +14,8 @@ import us.talabrek.ultimateskyblock.uSkyBlock;
 
 import java.util.Map;
 
+import static us.talabrek.ultimateskyblock.util.I18nUtil.tr;
+
 /**
  * The island moderator command.
  */
@@ -21,7 +23,7 @@ public class AdminIslandCommand extends CompositeUSBCommand {
     private final uSkyBlock plugin;
 
     public AdminIslandCommand(final uSkyBlock plugin) {
-        super("island", "usb.admin.island", "manage islands");
+        super("island", "", "manage islands");
         this.plugin = plugin;
         add(new AbstractIslandInfoCommand("protect", "usb.mod.protect", "protects the island") {
             @Override
@@ -29,7 +31,7 @@ public class AdminIslandCommand extends CompositeUSBCommand {
                 protectIsland(sender, islandInfo);
             }
         });
-        add(new AbstractUSBCommand("delete", "usb.admin.delete", "?island", "delete the island (removes the blocks)") {
+        add(new AbstractUSBCommand("delete", "usb.admin.delete", "?leader", "delete the island (removes the blocks)") {
             @Override
             public boolean execute(final CommandSender sender, String alias, Map<String, Object> data, String... args) {
                 if (args.length == 1) {
@@ -46,12 +48,12 @@ public class AdminIslandCommand extends CompositeUSBCommand {
                         if (plugin.deleteEmptyIsland(islandName, new Runnable() {
                             @Override
                             public void run() {
-                                sender.sendMessage("\u00a79Deleted abandoned island at your current location.");
+                                sender.sendMessage(tr("\u00a79Deleted abandoned island at your current location."));
                             }
                         })) {
                             return true;
                         } else {
-                            sender.sendMessage("\u00a74Island at this location has members!\n\u00a7eUse \u00a79/usb island delete <name>\u00a7e to delete it.");
+                            sender.sendMessage(tr("\u00a74Island at this location has members!\n\u00a7eUse \u00a79/usb island delete <name>\u00a7e to delete it."));
                         }
                     }
                 }
@@ -70,20 +72,20 @@ public class AdminIslandCommand extends CompositeUSBCommand {
                 sender.sendMessage(islandInfo.toString());
             }
         });
-        add(new AbstractUSBCommand("protectall", "usb.mod.protectall", "protects all islands (time consuming)") {
+        add(new AbstractUSBCommand("protectall", "usb.admin.protectall", "protects all islands (time consuming)") {
             @Override
             public boolean execute(CommandSender sender, String alias, Map<String, Object> data, String... args) {
                 protectAll(plugin, sender);
                 return true;
             }
         });
-        add(new AbstractUSBCommand("setbiome", "usb.mod.biome", "?island biome", "sets the biome of the island") {
+        add(new AbstractUSBCommand("setbiome", "usb.admin.setbiome", "?leader biome", "sets the biome of the island") {
             @Override
             public boolean execute(CommandSender sender, String alias, Map<String, Object> data, String... args) {
                 if (args.length == 2) {
                     PlayerInfo playerInfo = plugin.getPlayerInfo(args[0]);
                     if (playerInfo == null || !playerInfo.getHasIsland()) {
-                        sender.sendMessage("\u00a74That player has no island.");
+                        sender.sendMessage(tr("\u00a74That player has no island."));
                         return false;
                     }
                     setBiome(sender, playerInfo, plugin.getIslandInfo(playerInfo), args[1]);
@@ -96,7 +98,7 @@ public class AdminIslandCommand extends CompositeUSBCommand {
                     }
                     IslandInfo islandInfo = plugin.getIslandInfo(islandName);
                     if (islandInfo == null) {
-                        sender.sendMessage("\u00a74No valid island at your location");
+                        sender.sendMessage(tr("\u00a74No valid island at your location"));
                         return false;
                     }
                     setBiome(sender, islandInfo, biome.name());
@@ -111,10 +113,10 @@ public class AdminIslandCommand extends CompositeUSBCommand {
 
     private void removePlayerFromIsland(CommandSender sender, PlayerInfo playerInfo, IslandInfo islandInfo) {
         if (playerInfo == null) {
-            sender.sendMessage("\u00a74No valid player-name supplied.");
+            sender.sendMessage(tr("\u00a74No valid player-name supplied."));
             return;
         }
-        sender.sendMessage("Removing " + playerInfo.getPlayerName() + " from island");
+        sender.sendMessage(tr("Removing {0} from island", playerInfo.getPlayerName()));
         playerInfo.removeFromIsland();
         islandInfo.removeMember(playerInfo);
         playerInfo.save();
@@ -123,55 +125,55 @@ public class AdminIslandCommand extends CompositeUSBCommand {
     private void setBiome(CommandSender sender, IslandInfo islandInfo, String biome) {
         if (uSkyBlock.getInstance().setBiome(islandInfo.getIslandLocation(), biome)) {
             islandInfo.setBiome(biome);
-            sender.sendMessage("\u00a7eChanged biome of " + islandInfo.getLeader() + "'s island to " + biome + ".");
+            sender.sendMessage(tr("\u00a7eChanged biome of {0}'s island to {1}.", islandInfo.getLeader(), biome));
         } else {
             islandInfo.setBiome("OCEAN");
-            sender.sendMessage("\u00a7eChanged biome of " + islandInfo.getLeader() + "'s island to OCEAN.");
+            sender.sendMessage(tr("\u00a7eChanged biome of {0}'s island to OCEAN.", islandInfo.getLeader()));
         }
-        sender.sendMessage(ChatColor.GREEN + "You may need to go to spawn, or relog, to see the changes.");
+        sender.sendMessage(tr("\u00a7aYou may need to go to spawn, or relog, to see the changes."));
     }
 
     private void setBiome(CommandSender sender, PlayerInfo playerInfo, IslandInfo islandInfo, String biome) {
         if (playerInfo == null || !playerInfo.getHasIsland()) {
-            sender.sendMessage("\u00a74That player has no island.");
+            sender.sendMessage(tr("\u00a74That player has no island."));
             return;
         }
         if (uSkyBlock.getInstance().setBiome(playerInfo.getIslandLocation(), biome)) {
             islandInfo.setBiome(biome);
-            sender.sendMessage("\u00a7e" + playerInfo.getPlayerName() + " has had their biome changed to " + biome + ".");
+            sender.sendMessage(tr("\u00a7e{0} has had their biome changed to {1}.", playerInfo.getPlayerName(), biome));
         } else {
             islandInfo.setBiome("OCEAN");
-            sender.sendMessage("\u00a7e" + playerInfo.getPlayerName() + " has had their biome changed to OCEAN.");
+            sender.sendMessage(tr("\u00a7e{0} has had their biome changed to OCEAN.", playerInfo.getPlayerName()));
         }
-        sender.sendMessage(ChatColor.GREEN + "You may need to go to spawn, or relog, to see the changes.");
+        sender.sendMessage(tr("\u00a7aYou may need to go to spawn, or relog, to see the changes."));
     }
 
     private void protectAll(uSkyBlock plugin, CommandSender sender) {
         synchronized (plugin) {
             if (plugin.isProtectAllActive()) {
-                sender.sendMessage("\u00a74Sorry!\u00a7e A protect-all is already running. Let it complete first.");
+                sender.sendMessage(tr("\u00a74Sorry!\u00a7e A protect-all is already running. Let it complete first."));
                 return;
             }
             plugin.setProtectAllActive(true);
         }
-        sender.sendMessage("\u00a7eStarting a protect-all task. It will take a while.");
+        sender.sendMessage(tr("\u00a7eStarting a protect-all task. It will take a while."));
         new ProtectAllTask(plugin, sender).runTask(plugin);
     }
 
     private void deleteIsland(CommandSender sender, PlayerInfo playerInfo) {
         if (playerInfo != null && playerInfo.getIslandLocation() != null) {
-            sender.sendMessage("\u00a7eRemoving " + playerInfo.getPlayerName() + "'s island.");
+            sender.sendMessage(tr("\u00a7eRemoving {0}'s island.", playerInfo.getPlayerName()));
             uSkyBlock.getInstance().deletePlayerIsland(playerInfo.getPlayerName(), null);
         } else {
-            sender.sendMessage("Error: That player does not have an island!");
+            sender.sendMessage(tr("Error: That player does not have an island!"));
         }
     }
 
     private void protectIsland(CommandSender sender, IslandInfo islandInfo) {
         if (WorldGuardHandler.protectIsland(plugin, sender, islandInfo)) {
-            sender.sendMessage("\u00a7e" + islandInfo.getLeader() + "'s island at " + islandInfo.getName() + " has been protected");
+            sender.sendMessage(tr("\u00a7e{0}'s island at {1} has been protected", islandInfo.getLeader(), islandInfo.getName()));
         } else {
-            sender.sendMessage("\u00a74" + islandInfo.getLeader() + "'s island at " + islandInfo.getName() + " was already protected");
+            sender.sendMessage(tr("\u00a74{0}'s island at {1} was already protected", islandInfo.getLeader(), islandInfo.getName()));
         }
     }
 }

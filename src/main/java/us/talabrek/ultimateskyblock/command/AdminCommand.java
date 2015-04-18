@@ -24,6 +24,7 @@ public class AdminCommand extends AbstractCommandExecutor {
         addTab("oplayer", playerCompleter);
         addTab("player", allPlayerCompleter);
         addTab("island", allPlayerCompleter);
+        addTab("leader", allPlayerCompleter);
         addTab("challenge", challengeCompleter);
         addTab("biome", biomeCompleter);
         add(new ReloadCommand());
@@ -46,5 +47,6 @@ public class AdminCommand extends AbstractCommandExecutor {
         add(new WGCommand(plugin));
         add(new VersionCommand(plugin));
         add(new AsyncCommand(plugin));
+        add(new CooldownCommand(plugin));
     }
 }

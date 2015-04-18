@@ -7,6 +7,8 @@ import us.talabrek.ultimateskyblock.uSkyBlock;
 
 import java.util.Map;
 
+import static us.talabrek.ultimateskyblock.util.I18nUtil.tr;
+
 public class ToggleWarp extends RequireIslandCommand {
     public ToggleWarp(uSkyBlock plugin) {
         super(plugin, "togglewarp|tw", "usb.extra.addwarp", "enable/disable warping to your island.");
@@ -17,17 +19,17 @@ public class ToggleWarp extends RequireIslandCommand {
         if (island.hasPerm(player, "canToggleWarp")) {
             if (!island.hasWarp()) {
                 if (island.isLocked()) {
-                    player.sendMessage("\u00a74Your island is locked. You must unlock it before enabling your warp.");
+                    player.sendMessage(tr("\u00a74Your island is locked. You must unlock it before enabling your warp."));
                     return true;
                 }
-                island.sendMessageToIslandGroup(player.getName() + " activated the island warp.");
+                island.sendMessageToIslandGroup("\u00a7b" +player.getName() + "\u00a7d activated the island warp.");
                 island.setWarpActive(true);
             } else {
-                island.sendMessageToIslandGroup(player.getName() + " deactivated the island warp.");
+                island.sendMessageToIslandGroup("\u00a7b" +player.getName() + "\u00a7d deactivated the island warp.");
                 island.setWarpActive(false);
             }
         } else {
-            player.sendMessage("\u00a7cYou do not have permission to enable/disable your island's warp!");
+            player.sendMessage(tr("\u00a7cYou do not have permission to enable/disable your island's warp!"));
         }
         return true;
     }

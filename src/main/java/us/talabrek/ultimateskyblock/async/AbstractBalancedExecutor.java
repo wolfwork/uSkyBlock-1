@@ -104,7 +104,7 @@ public abstract class AbstractBalancedExecutor implements BalancedExecutor {
                     // TODO: 18/01/2015 - R4zorax: Show progress somewhere
                     double ticks = (t2-t1)/50d;
                     usedTicks[0] += ticks;
-                    if (ticks == 0) {
+                    if (ticks < 0.5) {
                         ticks = 0.5;
                     }
                     // update length for next iteration
@@ -112,9 +112,12 @@ public abstract class AbstractBalancedExecutor implements BalancedExecutor {
                     if (newLength < 1) {
                         newLength = 1;
                     }
+                    if (newLength > len*2) {
+                        newLength = len*2; // Max double the items.
+                    }
                     length[0] = newLength;
                     long waitTime = (long) Math.ceil((1-loadFactor)*ticks);
-                    log.log(Level.FINE, "Executed " + len + " tasks in " + ticks + " ticks");
+                    log.log(Level.FINE, "Executed " + len + " tasks in " + ticks + " ticks (next length = " + newLength + ")");
                     if (task.isComplete() || len == 0) {
                         log.log(Level.FINE,
                                 String.format("Balanced execution of %s completed in %s using %5.2f ticks",

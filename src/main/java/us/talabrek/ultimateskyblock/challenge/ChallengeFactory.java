@@ -44,6 +44,9 @@ public class ChallengeFactory {
 
     public static Challenge createChallenge(Rank rank, ConfigurationSection section, ChallengeDefaults defaults) {
         String name = section.getName().toLowerCase();
+        if (section.getBoolean("disabled", false)) {
+            return null; // Skip this challenge
+        }
         Challenge.Type type = Challenge.Type.from(section.getString("type", "onPlayer"));
         String requiredItems = section.getString("requiredItems", "");
         List<EntityMatch> requiredEntities = createEntities(section.getStringList("requiredEntities"));
@@ -96,9 +99,15 @@ public class ChallengeFactory {
         if (section == null) {
             return null;
         }
+        List<String> items = new ArrayList<>();
+        if (!section.getStringList("items").isEmpty()) {
+            items.addAll(section.getStringList("items"));
+        } else if (section.getString("items", null) != null) {
+            items.addAll(Arrays.asList(section.getString("items").split(" ")));
+        }
         return new Reward(
                 section.getString("text", "\u00a74Unknown"),
-                ItemStackUtil.createItemList(section.getString("items")),
+                ItemStackUtil.createItemsWithProbabilty(items),
                 section.getString("permission"),
                 section.getInt("currency", 0),
                 section.getInt("xp", 0),

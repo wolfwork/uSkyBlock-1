@@ -10,6 +10,8 @@ import us.talabrek.ultimateskyblock.uSkyBlock;
 
 import java.util.Map;
 
+import static us.talabrek.ultimateskyblock.util.I18nUtil.tr;
+
 /**
  * The challenge admin command.
  */
@@ -25,11 +27,11 @@ public class AdminChallengeCommand extends CompositeUSBCommand {
             protected void doExecute(CommandSender sender, PlayerInfo playerInfo, ChallengeCompletion completion) {
                 String challenge = completion.getName();
                 if (completion.getTimesCompleted() > 0) {
-                    sender.sendMessage("\u00a74Challenge has already been completed");
+                    sender.sendMessage(tr("\u00a74Challenge has already been completed"));
                 } else {
                     playerInfo.completeChallenge(challenge);
                     playerInfo.save();
-                    sender.sendMessage("\u00a7echallenge: " + challenge + " has been completed for " + playerInfo.getPlayerName());
+                    sender.sendMessage(tr("\u00a7echallenge: {0} has been completed for {1}", challenge,  playerInfo.getPlayerName()));
                 }
             }
         });
@@ -39,11 +41,11 @@ public class AdminChallengeCommand extends CompositeUSBCommand {
                 String challenge = completion.getName();
                 String playerName = pi.getPlayerName();
                 if (completion.getTimesCompleted() == 0) {
-                    sender.sendMessage("\u00a74Challenge has never been completed");
+                    sender.sendMessage(tr("\u00a74Challenge has never been completed"));
                 } else {
                     pi.resetChallenge(challenge);
                     pi.save();
-                    sender.sendMessage("\u00a7echallenge: " + challenge + " has been reset for " + playerName);
+                    sender.sendMessage(tr("\u00a7echallenge: {0} has been reset for {1}", challenge, playerName));
                 }
             }
         });
@@ -54,7 +56,7 @@ public class AdminChallengeCommand extends CompositeUSBCommand {
                 if (playerInfo != null) {
                     playerInfo.resetAllChallenges();
                     playerInfo.save();
-                    sender.sendMessage("\u00a7e" + playerInfo.getPlayerName() + " has had all challenges reset.");
+                    sender.sendMessage(tr("\u00a7e{0} has had all challenges reset.", playerInfo.getPlayerName()));
                     return true;
                 }
                 return false;
@@ -89,10 +91,10 @@ public class AdminChallengeCommand extends CompositeUSBCommand {
                     doExecute(sender, playerInfo, completion);
                     return true;
                 } else {
-                    sender.sendMessage("\u00a74No challenge named " + args[0] + " was found!");
+                    sender.sendMessage(tr("\u00a74No challenge named {0} was found!", args[0]));
                 }
             } else {
-                sender.sendMessage("\u00a74No player named " + data.get("player") + " was found!");
+                sender.sendMessage(tr("\u00a74No player named {0} was found!", data.get("player")));
             }
             return false;
         }

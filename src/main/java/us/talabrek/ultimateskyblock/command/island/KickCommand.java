@@ -2,13 +2,14 @@ package us.talabrek.ultimateskyblock.command.island;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import us.talabrek.ultimateskyblock.Settings;
 import us.talabrek.ultimateskyblock.island.IslandInfo;
 import us.talabrek.ultimateskyblock.player.PlayerInfo;
 import us.talabrek.ultimateskyblock.uSkyBlock;
 
 import java.util.Map;
 import java.util.logging.Level;
+
+import static us.talabrek.ultimateskyblock.util.I18nUtil.tr;
 
 @SuppressWarnings("deprecation")
 public class KickCommand extends RequireIslandCommand {
@@ -20,40 +21,40 @@ public class KickCommand extends RequireIslandCommand {
     protected boolean doExecute(String alias, Player player, PlayerInfo pi, IslandInfo island, Map<String, Object> data, String... args) {
         if (args.length == 1) {
             if (island == null || !island.hasPerm(player, "canKickOthers")) {
-                player.sendMessage("\u00a74You do not have permission to kick others from this island!");
+                player.sendMessage(tr("\u00a74You do not have permission to kick others from this island!"));
                 return true;
             }
             String playerName = args[0];
             Player otherPlayer = Bukkit.getPlayer(playerName);
             if (otherPlayer == null && Bukkit.getOfflinePlayer(playerName) == null) {
-                player.sendMessage("\u00a74That player doesn't exist.");
-                return true;
-            }
-            if (!island.isParty()) {
-                player.sendMessage("\u00a74No one else is on your island, are you seeing things?");
+                player.sendMessage(tr("\u00a74That player doesn't exist."));
                 return true;
             }
             if (island.isLeader(playerName)) {
-                player.sendMessage("\u00a74You can't remove the leader from the Island!");
+                player.sendMessage(tr("\u00a74You can't remove the leader from the Island!"));
                 return true;
             }
             if (player.getName().equalsIgnoreCase(playerName)) {
-                player.sendMessage("\u00a74Stop kickin' yourself!");
+                player.sendMessage(tr("\u00a74Stop kickin' yourself!"));
                 return true;
             }
             if (island.getMembers().contains(playerName)) {
                 if (otherPlayer != null) {
                     plugin.clearPlayerInventory(otherPlayer);
-                    otherPlayer.sendMessage("\u00a74" + player.getName() + " has removed you from their island!");
+                    otherPlayer.sendMessage(tr("\u00a74" + player.getName() + " has removed you from their island!"));
                     plugin.spawnTeleport(otherPlayer);
                 }
                 if (Bukkit.getPlayer(island.getLeader()) != null) {
-                    Bukkit.getPlayer(island.getLeader()).sendMessage("\u00a74" + playerName + " has been removed from the island.");
+                    Bukkit.getPlayer(island.getLeader()).sendMessage(tr("\u00a74{0} has been removed from the island.", playerName));
                 }
                 island.removeMember(plugin.getPlayerInfo(playerName));
                 uSkyBlock.log(Level.INFO, "Removing from " + island.getLeader() + "'s Island");
+            } else if (otherPlayer != null && plugin.locationIsOnIsland(player, otherPlayer.getLocation())) {
+                plugin.spawnTeleport(otherPlayer);
+                otherPlayer.sendMessage(tr("\u00a74" + player.getName() + " has kicked you from their island!"));
+                player.sendMessage(tr("\u00a74{0} has been kicked from the island.", playerName));
             } else {
-                player.sendMessage("\u00a74That player is not part of your island group!");
+                player.sendMessage(tr("\u00a74That player is not part of your island group, and not on your island!"));
             }
             return true;
         }
