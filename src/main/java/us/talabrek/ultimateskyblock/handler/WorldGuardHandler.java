@@ -117,18 +117,19 @@ public class WorldGuardHandler {
         for (String member : islandConfig.getMembers()) {
             owners.addPlayer(member);
         }
+        DefaultDomain members = new DefaultDomain();
+        for (String trust : islandConfig.getTrustees()) {
+            members.addPlayer(trust);
+        }
         region.setOwners(owners);
+        region.setMembers(members);
         region.setPriority(100);
         region.setFlag(DefaultFlag.GREET_MESSAGE,
                 DefaultFlag.GREET_MESSAGE.parseInput(getWorldGuard(), sender, "\u00a7d** You are entering \u00a7b" + islandConfig.getLeader() + "'s \u00a7disland."));
         region.setFlag(DefaultFlag.FAREWELL_MESSAGE,
                 DefaultFlag.FAREWELL_MESSAGE.parseInput(getWorldGuard(), sender, "\u00a7d** You are leaving \u00a7b" + islandConfig.getLeader() + "'s \u00a7disland."));
         setVersionSpecificFlags(region);
-        if (Settings.island_allowPvP) {
-            region.setFlag(DefaultFlag.PVP, StateFlag.State.ALLOW);
-        } else {
-            region.setFlag(DefaultFlag.PVP, StateFlag.State.DENY);
-        }
+        region.setFlag(DefaultFlag.PVP, null);
         if (islandConfig.isLocked()) {
             region.setFlag(DefaultFlag.ENTRY, StateFlag.State.DENY);
         } else {
@@ -289,6 +290,11 @@ public class WorldGuardHandler {
                 global = new GlobalProtectedRegion("__global__");
             }
             global.setFlag(DefaultFlag.BUILD, StateFlag.State.DENY);
+            if (Settings.island_allowPvP) {
+                global.setFlag(DefaultFlag.PVP, StateFlag.State.ALLOW);
+            } else {
+                global.setFlag(DefaultFlag.PVP, StateFlag.State.DENY);
+            }
             regionManager.addRegion(global);
             save(regionManager);
         }

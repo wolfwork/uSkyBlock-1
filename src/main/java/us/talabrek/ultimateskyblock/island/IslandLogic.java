@@ -3,6 +3,7 @@ package us.talabrek.ultimateskyblock.island;
 import com.sk89q.worldedit.Vector;
 import com.sk89q.worldedit.regions.CuboidRegion;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
@@ -20,7 +21,7 @@ import us.talabrek.ultimateskyblock.util.FileUtil;
 import us.talabrek.ultimateskyblock.util.LocationUtil;
 import us.talabrek.ultimateskyblock.util.PlayerUtil;
 import us.talabrek.ultimateskyblock.util.TimeUtil;
-import us.talabrek.ultimateskyblock.uuid.PlayerNameChangedEvent;
+import us.talabrek.ultimateskyblock.uuid.AsyncPlayerNameChangedEvent;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -45,6 +46,7 @@ public class IslandLogic {
 
     private final Map<String, IslandInfo> islands = new ConcurrentHashMap<>();
     private final boolean showMembers;
+    private final boolean flatlandFix;
 
     private volatile long lastGenerate = 0;
     private final List<IslandLevel> ranks = new ArrayList<>();
@@ -52,17 +54,37 @@ public class IslandLogic {
     public IslandLogic(uSkyBlock plugin, File directoryIslands) {
         this.plugin = plugin;
         this.directoryIslands = directoryIslands;
-        showMembers = plugin.getConfig().getBoolean("options.island.topTenShowMembers", true);
+        this.showMembers = plugin.getConfig().getBoolean("options.island.topTenShowMembers", true);
+        this.flatlandFix = plugin.getConfig().getBoolean("options.island.fixFlatland", false);
     }
 
     public synchronized IslandInfo getIslandInfo(String islandName) {
-        if (islandName == null || islandName.isEmpty()) {
+        if (islandName == null) {
             return null;
         }
+
         if (!islands.containsKey(islandName)) {
-            islands.put(islandName, new IslandInfo(islandName));
+            IslandInfo islandInfo = new IslandInfo(islandName);
+            if (islandInfo.exists()) {
+                islands.put(islandName, islandInfo);   
+                return islandInfo;
+            }
+            // We don't load the island if the file did not exist.
+            return null;
         }
         return islands.get(islandName);
+    }
+    
+    public synchronized IslandInfo createIslandInfo(String islandName) {
+        IslandInfo islandInfo = getIslandInfo(islandName);
+        if (islandInfo != null) {
+            return islandInfo;
+        }
+        
+        if (!islands.containsKey(islandName)) {
+            islands.put(islandName, islandInfo = new IslandInfo(islandName));
+        }
+        return islandInfo;
     }
 
     public IslandInfo getIslandInfo(PlayerInfo playerInfo) {
@@ -89,9 +111,9 @@ public class IslandLogic {
         ProtectedRegion region = WorldGuardHandler.getIslandRegionAt(loc);
         if (region != null) {
             for (Player player : WorldEditHandler.getPlayersInRegion(plugin.getWorld(), region)) {
-                if (player != null && player.isOnline() && !player.isFlying()) {
+                if (player != null && player.isOnline()) {
                     player.sendMessage(tr("\u00a7cThe island you are on is being deleted! Sending you to spawn."));
-                    plugin.spawnTeleport(player);
+                    plugin.spawnTeleport(player, true);
                 }
             }
             WorldEditHandler.clearIsland(skyBlockWorld, region, afterDeletion);
@@ -101,28 +123,40 @@ public class IslandLogic {
         }
     }
 
-    public boolean clearFlatland(final CommandSender sender, final Location loc, int delay) {
+    public boolean clearFlatland(final CommandSender sender, final Location loc, final int delay) {
         if (loc == null) {
             return false;
         }
-        final World w = loc.getWorld();
-        final int px = loc.getBlockX();
-        final int pz = loc.getBlockZ();
-        final int py = 0;
-        final int range = Math.max(Settings.island_protectionRange, Settings.island_distance) + 1;
-        final int radius = range/2;
-        // 5 sampling points...
-        if (w.getBlockAt(px, py, pz).getType() == BEDROCK
-                || w.getBlockAt(px+radius, py, pz+radius).getType() == BEDROCK
-                || w.getBlockAt(px+radius, py, pz-radius).getType() == BEDROCK
-                || w.getBlockAt(px-radius, py, pz+radius).getType() == BEDROCK
-                || w.getBlockAt(px-radius, py, pz-radius).getType() == BEDROCK)
-        {
-            sender.sendMessage(String.format("\u00a7c-----------------------------------\n\u00a7cFlatland detected under your island!\n\u00a7e Clearing it in %s, stay clear.\n\u00a7c-----------------------------------\n", TimeUtil.ticksAsString(delay)));
-            new WorldEditClearTask(plugin, sender, new CuboidRegion(new Vector(px-radius, 0, pz-radius),
-                    new Vector(px+radius, 4, pz+radius)),
-                    "\u00a7eFlatland was cleared under your island (%s). Take care.").runTaskLater(plugin, delay);
-            return true;
+        if (delay > 0 && !flatlandFix) {
+            return false; // Skip
+        }
+        Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                final World w = loc.getWorld();
+                final int px = loc.getBlockX();
+                final int pz = loc.getBlockZ();
+                final int py = 0;
+                final int range = Math.max(Settings.island_protectionRange, Settings.island_distance) + 1;
+                final int radius = range/2;
+                // 5 sampling points...
+                if (w.getBlockAt(px, py, pz).getType() == BEDROCK
+                        || w.getBlockAt(px+radius, py, pz+radius).getType() == BEDROCK
+                        || w.getBlockAt(px+radius, py, pz-radius).getType() == BEDROCK
+                        || w.getBlockAt(px-radius, py, pz+radius).getType() == BEDROCK
+                        || w.getBlockAt(px-radius, py, pz-radius).getType() == BEDROCK)
+                {
+                    sender.sendMessage(String.format("\u00a7c-----------------------------------\n\u00a7cFlatland detected under your island!\n\u00a7e Clearing it in %s, stay clear.\n\u00a7c-----------------------------------\n", TimeUtil.ticksAsString(delay)));
+                    new WorldEditClearTask(plugin, sender, new CuboidRegion(new Vector(px-radius, 0, pz-radius),
+                            new Vector(px+radius, 4, pz+radius)),
+                            "\u00a7eFlatland was cleared under your island (%s). Take care.").runTaskLater(plugin, delay);
+                }
+            }
+        };
+        if (Bukkit.isPrimaryThread()) {
+            runnable.run();
+        } else {
+            Bukkit.getScheduler().runTask(plugin, runnable);
         }
         return false;
     }
@@ -237,8 +271,8 @@ public class IslandLogic {
     }
 
     public synchronized IslandInfo createIsland(String location, String player) {
-        IslandInfo info = getIslandInfo(location);
-        info.clearIslandConfig(player);
+        IslandInfo info = createIslandInfo(location);
+        info.resetIslandConfig(player);
         return info;
     }
 
@@ -252,19 +286,16 @@ public class IslandLogic {
         islands.remove(islandName);
     }
 
-    public void renamePlayer(PlayerInfo playerInfo, Runnable completion, PlayerNameChangedEvent change) {
+    public void renamePlayer(PlayerInfo playerInfo, AsyncPlayerNameChangedEvent change) {
         List<String> islands = new ArrayList<>();
         islands.add(playerInfo.locationForParty());
         islands.addAll(playerInfo.getBannedFrom());
         for (String islandName : islands) {
             renamePlayer(islandName, change);
         }
-        if (completion != null) {
-            completion.run();
-        }
     }
 
-    public void renamePlayer(String islandName, PlayerNameChangedEvent e) {
+    public void renamePlayer(String islandName, AsyncPlayerNameChangedEvent e) {
         IslandInfo islandInfo = getIslandInfo(islandName);
         if (islandInfo != null) {
             islandInfo.renamePlayer(e.getPlayer(), e.getOldName());

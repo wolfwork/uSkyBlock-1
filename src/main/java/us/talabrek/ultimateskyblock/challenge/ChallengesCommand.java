@@ -22,13 +22,17 @@ public class ChallengesCommand implements CommandExecutor, TabCompleter {
     public ChallengesCommand(uSkyBlock plugin) {
         this.plugin = plugin;
     }
-    
+
     public boolean onCommand(final CommandSender sender, final Command command, final String label, final String[] split) {
         if (!plugin.isRequirementsMet(sender)) {
             return false;
         }
         if (!(sender instanceof Player)) {
             return false;
+        }
+        if (plugin.getPlayerLogic().isLocked((Player) sender)) {
+            sender.sendMessage(tr("\u00a74Your island data is being loaded - try again later"));
+            return true;
         }
         if (!plugin.getChallengeLogic().isEnabled()) {
             sender.sendMessage(tr("\u00a7eChallenges has been disabled. Contact an administrator."));

@@ -51,7 +51,7 @@ ranks:
         # [itemid] The itemid of the item to be displayed in the challenge menu for complete challenges.
         displayItem: 4
         # [true/false] Take required items on completing a challenge.
-        takeitem: true
+        takeItems: true
         reward:
           # [text] Description of the reward. If omitted §4Unknown will be shown.
           text: '3 leather'
@@ -545,6 +545,10 @@ ranks:
           text: '1 diamond & 1 end-portal'
           currency: 250
           xp: 250
+          commands:
+          # Regen for 10 seconds, then jump-boost for another 10
+           - 'op:effect {party} 10 10'
+           - '{d=200}op:effect {player} 8 10'
   Skylord:
     displayItem: BEACON
     requires:
@@ -712,4 +716,4 @@ ranks:
           currency: 50
           xp: 50
 # DO NOT CHANGE!
-version: 8
+version: 9

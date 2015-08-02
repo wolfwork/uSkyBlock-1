@@ -1,17 +1,19 @@
 package us.talabrek.ultimateskyblock.command.island;
 
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import us.talabrek.ultimateskyblock.command.InviteHandler;
 
 import java.util.Map;
 
+import us.talabrek.ultimateskyblock.uSkyBlock;
 import static us.talabrek.ultimateskyblock.util.I18nUtil.tr;
 
 public class AcceptRejectCommand extends RequirePlayerCommand {
     private final InviteHandler inviteHandler;
 
     public AcceptRejectCommand(InviteHandler inviteHandler) {
-        super("accept|reject", "usb.party.join", "accept/reject an invitation.");
+        super("accept|reject", "usb.party.join", tr("accept/reject an invitation."));
         this.inviteHandler = inviteHandler;
     }
 

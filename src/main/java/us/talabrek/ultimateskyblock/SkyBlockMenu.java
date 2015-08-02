@@ -34,6 +34,7 @@ import static us.talabrek.ultimateskyblock.util.I18nUtil.tr;
 public class SkyBlockMenu {
     private static final Pattern PERM_VALUE_PATTERN = Pattern.compile("(\\[(?<perm>(?<not>[!])?[^\\]]+)\\])?(?<value>.*)");
     private static final Pattern CHALLENGE_PAGE_HEADER = Pattern.compile(tr("Challenge Menu ") + "\\((?<p>[0-9]+)/(?<max>[0-9]+)\\)");
+    public static final int CHALLENGE_PAGESIZE = 54;
     private uSkyBlock skyBlock;
     private final ChallengeLogic challengeLogic;
     ItemStack pHead;
@@ -60,7 +61,7 @@ public class SkyBlockMenu {
 
     public Inventory displayPartyPlayerGUI(final Player player, final String pname) {
         List<String> lores = new ArrayList<>();
-        Inventory menu = Bukkit.createInventory(null, 9, pname + " <Permissions>");
+        Inventory menu = Bukkit.createInventory(null, 9, tr("{0} <Permissions>", pname));
         final ItemStack pHead = new ItemStack(397, 1, (short) 3);
         final SkullMeta meta3 = (SkullMeta) pHead.getItemMeta();
         ItemMeta meta2 = sign.getItemMeta();
@@ -159,7 +160,7 @@ public class SkyBlockMenu {
 
     public Inventory displayPartyGUI(final Player player) {
         List<String> lores = new ArrayList<>();
-        Inventory menu = Bukkit.createInventory(null, 18, "\u00a79Island Group Members");
+        Inventory menu = Bukkit.createInventory(null, 18, tr("\u00a79Island Group Members"));
         IslandInfo islandInfo = skyBlock.getIslandInfo(player);
         final Set<String> memberList = islandInfo.getMembers();
         final SkullMeta meta3 = (SkullMeta) pHead.getItemMeta();
@@ -230,7 +231,7 @@ public class SkyBlockMenu {
 
     public Inventory displayLogGUI(final Player player) {
         List<String> lores = new ArrayList<>();
-        Inventory menu = Bukkit.createInventory(null, 9, "\u00a79Island Log");
+        Inventory menu = Bukkit.createInventory(null, 9, tr("\u00a79Island Log"));
         ItemMeta meta4 = sign.getItemMeta();
         meta4.setDisplayName(tr("\u00a7lIsland Log"));
         addLore(lores, tr("\u00a7eClick here to return to\n\u00a7ethe main island screen."));
@@ -253,7 +254,7 @@ public class SkyBlockMenu {
 
     public Inventory displayBiomeGUI(final Player player) {
         List<String> lores = new ArrayList<>();
-        Inventory menu = Bukkit.createInventory(null, 18, "\u00a79Island Biome");
+        Inventory menu = Bukkit.createInventory(null, 18, tr("\u00a79Island Biome"));
         ItemMeta meta4 = sign.getItemMeta();
         meta4.setDisplayName(tr("\u00a7hIsland Biome"));
         addLore(lores, tr("\u00a7eClick here to return to\n\u00a7ethe main island screen."));
@@ -460,6 +461,24 @@ public class SkyBlockMenu {
         menuItem.setItemMeta(meta4);
         menu.addItem(menuItem);
         lores.clear();
+        menuItem = new ItemStack(Material.RED_ROSE, 1, (short) 5);
+        meta4 = menuItem.getItemMeta();
+        if (VaultHandler.checkPerk(player.getName(), "usb.biome.flower_forest", player.getWorld())) {
+            meta4.setDisplayName(tr("\u00a7aBiome: Flower Forest"));
+            addLore(lores, tr("\u00a7fThe flower forest biome.\n\u00a7fPassive mobs will spawn \n\u00a7fnormally and hostile\n\u00a7fmobs will spawn."));
+            if ("FLOWER_FOREST".equals(currentBiome)) {
+                addLore(lores, tr("\u00a72\u00a7lThis is your current biome."));
+            } else {
+                addLore(lores, tr("\u00a7e\u00a7lClick to change to this biome."));
+            }
+        } else {
+            meta4.setDisplayName(tr("\u00a78Biome: Flower Forest"));
+            addLore(lores, tr("\u00a7cYou cannot use this biome.\n\u00a77The flower forest biome.\n\u00a77Passive mobs will spawn \n\u00a77normally and hostile\n\u00a77mobs will spawn."));
+        }
+        meta4.setLore(lores);
+        menuItem.setItemMeta(meta4);
+        menu.addItem(menuItem);
+        lores.clear();
         return menu;
     }
 
@@ -554,7 +573,7 @@ public class SkyBlockMenu {
     }
 
     public Inventory displayChallengeGUI(final Player player, int page) {
-        Inventory menu = Bukkit.createInventory(null, 36, "\u00a79Challenge Menu (" + page + "/" + ((challengeLogic.getRanks().size() / 4) + 1) + ")");
+        Inventory menu = Bukkit.createInventory(null, CHALLENGE_PAGESIZE, tr("\u00a79Challenge Menu ({0}/{1})", page, ((challengeLogic.getRanks().size() / 6) + 1)));
         final PlayerInfo pi = skyBlock.getPlayerInfo(player);
         challengeLogic.populateChallengeRank(menu, player, pi, page);
         return menu;
@@ -562,11 +581,11 @@ public class SkyBlockMenu {
 
     public Inventory displayIslandGUI(final Player player) {
         Inventory menu = null;
-        if (skyBlock.hasIsland(player.getName())) {
-            menu = Bukkit.createInventory(null, 18, "\u00a79Island Menu");
+        if (skyBlock.hasIsland(player)) {
+            menu = Bukkit.createInventory(null, 18, tr("\u00a79Island Menu"));
             addMainMenu(menu, player);
         } else {
-            menu = Bukkit.createInventory(null, 9, "\u00a79Island Create Menu");
+            menu = Bukkit.createInventory(null, 9, tr("\u00a79Island Create Menu"));
             addInitMenu(menu);
         }
         return menu;
@@ -849,6 +868,10 @@ public class SkyBlockMenu {
                 p.closeInventory();
                 p.performCommand("island biome extreme_hills");
                 p.openInventory(displayIslandGUI(p));
+            } else if (event.getCurrentItem().getType() == Material.RED_ROSE && event.getCurrentItem().getDurability() == 5) {
+                p.closeInventory();
+                p.performCommand("island biome flower_forest");
+                p.openInventory(displayIslandGUI(p));
             } else if (event.getCurrentItem().getType() == Material.RAW_FISH) {
                 p.closeInventory();
                 p.performCommand("island biome ocean");
@@ -857,7 +880,7 @@ public class SkyBlockMenu {
                 p.closeInventory();
                 p.openInventory(displayIslandGUI(p));
             }
-        } else if (event.getInventory().getName().contains(tr("Challenge Menu ("))) {
+        } else if (event.getInventory().getName().contains(tr("Challenge Menu"))) {
             event.setCancelled(true);
             Matcher m = CHALLENGE_PAGE_HEADER.matcher(event.getInventory().getName());
             int page = 1;
@@ -866,7 +889,7 @@ public class SkyBlockMenu {
                 page = Integer.parseInt(m.group("p"));
                 max = Integer.parseInt(m.group("max"));
             }
-            if (event.getSlot() < 0 || event.getSlot() > 35) {
+            if (event.getSlot() < 0 || event.getSlot() > CHALLENGE_PAGESIZE) {
                 return;
             }
             if ((event.getSlot() % 9) > 0) { // 0,9... are the rank-headers...
@@ -879,7 +902,7 @@ public class SkyBlockMenu {
                 p.openInventory(displayChallengeGUI(p, page));
             } else {
                 p.closeInventory();
-                if (event.getSlot() < 18) { // Upper half
+                if (event.getSlot() < CHALLENGE_PAGESIZE/2) { // Upper half
                     if (page > 1) {
                         p.openInventory(displayChallengeGUI(p, page - 1));
                     } else {

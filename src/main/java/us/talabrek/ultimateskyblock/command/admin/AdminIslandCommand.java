@@ -1,6 +1,5 @@
 package us.talabrek.ultimateskyblock.command.admin;
 
-import org.bukkit.ChatColor;
 import org.bukkit.block.Biome;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -23,15 +22,15 @@ public class AdminIslandCommand extends CompositeUSBCommand {
     private final uSkyBlock plugin;
 
     public AdminIslandCommand(final uSkyBlock plugin) {
-        super("island", "", "manage islands");
+        super("island", "", tr("manage islands"));
         this.plugin = plugin;
-        add(new AbstractIslandInfoCommand("protect", "usb.mod.protect", "protects the island") {
+        add(new AbstractAsyncIslandInfoCommand("protect", "usb.mod.protect", tr("protects the island")) {
             @Override
             protected void doExecute(CommandSender sender, PlayerInfo playerInfo, IslandInfo islandInfo, String... args) {
                 protectIsland(sender, islandInfo);
             }
         });
-        add(new AbstractUSBCommand("delete", "usb.admin.delete", "?leader", "delete the island (removes the blocks)") {
+        add(new AbstractUSBCommand("delete", "usb.admin.delete", "?leader", tr("delete the island (removes the blocks)")) {
             @Override
             public boolean execute(final CommandSender sender, String alias, Map<String, Object> data, String... args) {
                 if (args.length == 1) {
@@ -60,26 +59,26 @@ public class AdminIslandCommand extends CompositeUSBCommand {
                 return false;
             }
         });
-        add(new AbstractIslandInfoCommand("remove", "usb.admin.remove", "removes the player from the island") {
+        add(new AbstractAsyncIslandInfoCommand("remove", "usb.admin.remove", tr("removes the player from the island")) {
             @Override
             protected void doExecute(CommandSender sender, PlayerInfo playerInfo, IslandInfo islandInfo, String... args) {
                 removePlayerFromIsland(sender, playerInfo, islandInfo);
             }
         });
-        add(new AbstractIslandInfoCommand("info", null, "print out info about the island") {
+        add(new AbstractAsyncIslandInfoCommand("info", null, tr("print out info about the island")) {
             @Override
             protected void doExecute(CommandSender sender, PlayerInfo playerInfo, IslandInfo islandInfo, String... args) {
                 sender.sendMessage(islandInfo.toString());
             }
         });
-        add(new AbstractUSBCommand("protectall", "usb.admin.protectall", "protects all islands (time consuming)") {
+        add(new AbstractUSBCommand("protectall", "usb.admin.protectall", tr("protects all islands (time consuming)")) {
             @Override
             public boolean execute(CommandSender sender, String alias, Map<String, Object> data, String... args) {
                 protectAll(plugin, sender);
                 return true;
             }
         });
-        add(new AbstractUSBCommand("setbiome", "usb.admin.setbiome", "?leader biome", "sets the biome of the island") {
+        add(new AbstractUSBCommand("setbiome", "usb.admin.setbiome", "?leader biome", tr("sets the biome of the island")) {
             @Override
             public boolean execute(CommandSender sender, String alias, Map<String, Object> data, String... args) {
                 if (args.length == 2) {
@@ -125,10 +124,10 @@ public class AdminIslandCommand extends CompositeUSBCommand {
     private void setBiome(CommandSender sender, IslandInfo islandInfo, String biome) {
         if (uSkyBlock.getInstance().setBiome(islandInfo.getIslandLocation(), biome)) {
             islandInfo.setBiome(biome);
-            sender.sendMessage(tr("\u00a7eChanged biome of {0}'s island to {1}.", islandInfo.getLeader(), biome));
+            sender.sendMessage(tr("\u00a7eChanged biome of {0}s island to {1}.", islandInfo.getLeader(), biome));
         } else {
             islandInfo.setBiome("OCEAN");
-            sender.sendMessage(tr("\u00a7eChanged biome of {0}'s island to OCEAN.", islandInfo.getLeader()));
+            sender.sendMessage(tr("\u00a7eChanged biome of {0}s island to OCEAN.", islandInfo.getLeader()));
         }
         sender.sendMessage(tr("\u00a7aYou may need to go to spawn, or relog, to see the changes."));
     }

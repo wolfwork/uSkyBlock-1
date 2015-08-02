@@ -1,11 +1,10 @@
 package us.talabrek.ultimateskyblock.command.island;
 
-import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
-
 import us.talabrek.ultimateskyblock.Settings;
 import us.talabrek.ultimateskyblock.api.IslandRank;
 import us.talabrek.ultimateskyblock.api.event.uSkyBlockEvent;
+import us.talabrek.ultimateskyblock.async.Callback;
 import us.talabrek.ultimateskyblock.island.IslandInfo;
 import us.talabrek.ultimateskyblock.island.IslandScore;
 import us.talabrek.ultimateskyblock.player.PlayerInfo;
@@ -18,7 +17,7 @@ import static us.talabrek.ultimateskyblock.util.I18nUtil.tr;
 
 public class LevelCommand extends RequireIslandCommand {
     public LevelCommand(uSkyBlock plugin) {
-        super(plugin, "level", "usb.island.level", "?island", "check your or anothers island level");
+        super(plugin, "level", "usb.island.level", "?island", tr("check your or anothers island level"));
     }
 
     @Override
@@ -57,13 +56,10 @@ public class LevelCommand extends RequireIslandCommand {
         }
         final PlayerInfo playerInfo = islandPlayer.equals(player.getName()) ? plugin.getPlayerInfo(player) : plugin.getPlayerInfo(islandPlayer);
         final boolean shouldRecalculate = player.getName().equals(playerInfo.getPlayerName()) || player.hasPermission("usb.admin.island");
-        if (shouldRecalculate) {
-            plugin.getIslandLogic().loadIslandChunks(playerInfo.getIslandLocation(), Settings.island_radius);
-        }
         final Runnable showInfo = new Runnable() {
             @Override
             public void run() {
-                if (player.isOnline()) {
+                if (player != null && player.isOnline() && playerInfo != null) {
                     player.sendMessage(tr("\u00a7eInformation about " + islandPlayer + "'s Island:"));
                     if (cmd.equalsIgnoreCase("level")) {
                         IslandRank rank = plugin.getIslandLogic().getRank(playerInfo.locationForParty());
@@ -79,13 +75,12 @@ public class LevelCommand extends RequireIslandCommand {
             plugin.getServer().getScheduler().runTaskLater(plugin, new Runnable() {
                 @Override
                 public void run() {
-                    try {
-                        IslandScore score = plugin.recalculateScore(player, playerInfo.locationForParty());
-                        plugin.fireChangeEvent(new uSkyBlockEvent(player, plugin, uSkyBlockEvent.Cause.RANK_UPDATED));
-                    } catch (Exception e) {
-                        uSkyBlock.log(Level.SEVERE, "Error while calculating Island Level", e);
-                    }
-                    plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, showInfo, 10L);
+                    plugin.calculateScoreAsync(player, playerInfo.locationForParty(), new Callback<IslandScore>() {
+                        @Override
+                        public void run() {
+                            plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, showInfo, 10L);
+                        }
+                    });
                 }
             }, 1L);
         } else {
@@ -93,6 +88,4 @@ public class LevelCommand extends RequireIslandCommand {
         }
         return true;
     }
-
-
 }

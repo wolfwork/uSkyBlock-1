@@ -1,14 +1,13 @@
 package us.talabrek.ultimateskyblock.uuid;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import us.talabrek.ultimateskyblock.player.PlayerInfo;
 import us.talabrek.ultimateskyblock.uSkyBlock;
-
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * The listener that takes action - if a player changes name.
@@ -22,30 +21,34 @@ public class PlayerNameChangeListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
-    public void onPlayerNameChange(PlayerNameChangedEvent event) {
+    public void onPlayerNameChange(AsyncPlayerNameChangedEvent event) {
         if (event.getOldName() != null) {
             renamePlayer(event);
         }
     }
 
-    private void renamePlayer(PlayerNameChangedEvent e) {
-        final String oldName = e.getOldName();
-        final Player player = e.getPlayer();
-        final long t1 = System.currentTimeMillis();
+    private void renamePlayer(final AsyncPlayerNameChangedEvent event) {
+        String oldName = event.getOldName();
+        Player player = event.getPlayer();
+        long t1 = System.currentTimeMillis();
         // TODO: 19/01/2015 - R4zorax: Block for interactions while converting?
-        PlayerInfo playerInfo = plugin.getPlayerInfo(oldName).renameTo(player.getName());
-        plugin.removeActivePlayer(oldName); // Force a reload
-        plugin.addActivePlayer(player.getName(), playerInfo);
-        Runnable completion = new Runnable() {
-            @Override
-            public void run() {
-                double t2 = System.currentTimeMillis();
-                t2 = (t2 - t1) / 1000d;
-                String message = String.format("Renamed player %s to %s in %5.2f seconds", oldName, player.getName(), t2);
-                log.log(Level.INFO, message);
-                player.sendMessage(String.format("\u00a79It took \u00a7a%5.2f\u00a79 seconds to rename your uSkyBlock presence from \u00a7a%s", t2, oldName));
-            }
-        };
-        plugin.getIslandLogic().renamePlayer(playerInfo, completion, e);
+
+        PlayerInfo playerInfo = event.getPlayerInfo();
+
+        // Rename the player config files first, but DO NOT load them to prevent it from thinking they were kicked from the island.
+        playerInfo.renameFrom(event.getOldName());
+
+        // Rename their island data.
+        plugin.getIslandLogic().renamePlayer(playerInfo, event);
+
+        // Handle island removal checks after.
+        // This fixes the player island from thinking they were kicked.
+        playerInfo.postRename();
+        
+        double t2 = System.currentTimeMillis();
+        t2 = (t2 - t1) / 1000d;
+        String message = String.format("Renamed player %s to %s in %s seconds.", oldName, player.getName(), t2);
+        log.log(Level.INFO, message);
+        player.sendMessage(String.format("\u00a79It took \u00a7a%s\u00a79 seconds to rename your uSkyBlock presence from \u00a7a%s\u00a79.", t2, oldName));
     }
 }

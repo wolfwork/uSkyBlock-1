@@ -7,21 +7,26 @@ import us.talabrek.ultimateskyblock.uSkyBlock;
 
 import java.util.Map;
 
+import static us.talabrek.ultimateskyblock.util.I18nUtil.tr;
+
 public class HomeCommand extends RequireIslandCommand {
     public HomeCommand(uSkyBlock plugin) {
-        super(plugin, "home|h", "usb.island.sethome", "teleport to the island home");
+        super(plugin, "home|h", "usb.island.sethome", tr("teleport to the island home"));
     }
 
     @Override
     protected boolean doExecute(String alias, Player player, PlayerInfo pi, IslandInfo island, Map<String, Object> data, String... args) {
+        if (pi.isIslandGenerating()) {
+            player.sendMessage(tr("\u00a7cYour island is in the process of generating, you cannot teleport home right now."));
+            return true;
+        }
+        if (pi.isIslandRestarting()) {
+            player.sendMessage(tr("\u00a7cYour island is in the process of restarting, you cannot teleport home right now."));
+            return true;
+        }
         if (pi.getHomeLocation() == null) {
             pi.setHomeLocation(pi.getIslandLocation());
         }
-        int maxParty = plugin.getConfig().getInt("options.general.maxPartySize", 4);
-        if (maxParty > island.getMaxPartySize()) {
-            island.setMaxPartySize(maxParty);
-        }
-        island.updatePartyNumber(player);
         plugin.homeTeleport(player, false);
         return true;
     }

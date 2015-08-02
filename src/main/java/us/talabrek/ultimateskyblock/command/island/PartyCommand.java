@@ -19,48 +19,49 @@ public class PartyCommand extends CompositeUSBCommand {
     private final SkyBlockMenu menu;
 
     public PartyCommand(final uSkyBlock plugin, SkyBlockMenu menu, final InviteHandler inviteHandler) {
-        super("party", "usb.island.create", "show party information");
+        super("party", "usb.island.create", tr("show party information"));
         this.plugin = plugin;
         this.menu = menu;
-        add(new AbstractUSBCommand("info", "shows information about your party") {
+        add(new AbstractUSBCommand("info", tr("shows information about your party")) {
             @Override
             public boolean execute(CommandSender sender, String alias, Map<String, Object> data, String... args) {
                 sender.sendMessage(plugin.getIslandInfo((Player) sender).toString());
                 return true;
             }
         });
-        add(new AbstractUSBCommand("invites", "show pending invites") {
+        add(new AbstractUSBCommand("invites", tr("show pending invites")) {
             @Override
             public boolean execute(CommandSender sender, String alias, Map<String, Object> data, String... args) {
                 IslandInfo islandInfo = plugin.getIslandInfo((Player) sender);
-                Set<UUID> pendingInvites = inviteHandler.getPendingInvites(islandInfo);
-                if (pendingInvites == null || pendingInvites.isEmpty()) {
+                Collection<String> pendingInvitesAsNames = inviteHandler.getPendingInvitesAsNames(islandInfo);
+                if (pendingInvitesAsNames == null || pendingInvitesAsNames.isEmpty()) {
                     sender.sendMessage(tr("\u00a7eNo pending invites"));
                 } else {
-                    List<String> invites = new ArrayList<>();
-                    for (UUID uuid : pendingInvites) {
-                        invites.add(plugin.getServer().getOfflinePlayer(uuid).getName());
-                    }
-                    sender.sendMessage("\u00a7ePending invites: " + invites);
+                    sender.sendMessage("\u00a7ePending invites: " + pendingInvitesAsNames);
                 }
                 return true;
             }
         });
-        add(new AbstractUSBCommand("uninvite", null, "player", "withdraw an invite") {
+        add(new AbstractUSBCommand("uninvite", null, "player", tr("withdraw an invite")) {
             @Override
-            public boolean execute(CommandSender sender, String alias, Map<String, Object> data, String... args) {
+            public boolean execute(final CommandSender sender, String alias, Map<String, Object> data, final String... args) {
                 if (args.length == 1) {
-                    IslandInfo islandInfo = plugin.getIslandInfo((Player) sender);
-                    if (!islandInfo.isLeader(sender.getName()) || !islandInfo.hasPerm(sender.getName(), "canInviteOthers")) {
-                        sender.sendMessage(tr("\u00a74You don't have permissions to unvite players."));
-                        return true;
-                    }
-                    String playerName = args[0];
-                    if (inviteHandler.uninvite(islandInfo, playerName)) {
-                        sender.sendMessage("\u00a7eSuccessfully withdrew invite for " + playerName);
-                    } else {
-                        sender.sendMessage("\u00a74No pending invite found for " + playerName);
-                    }
+                    plugin.getServer().getScheduler().runTaskAsynchronously(plugin, new Runnable() {
+                        @Override
+                        public void run() {
+                            IslandInfo islandInfo = plugin.getIslandInfo((Player) sender);
+                            if (!islandInfo.isLeader(sender.getName()) || !islandInfo.hasPerm(sender.getName(), "canInviteOthers")) {
+                                sender.sendMessage(tr("\u00a74You don't have permissions to unvite players."));
+                                return;
+                            }
+                            String playerName = args[0];
+                            if (inviteHandler.uninvite(islandInfo, playerName)) {
+                                sender.sendMessage("\u00a7eSuccessfully withdrew invite for " + playerName);
+                            } else {
+                                sender.sendMessage("\u00a74No pending invite found for " + playerName);
+                            }
+                        }
+                    });
                     return true;
                 }
                 return false;

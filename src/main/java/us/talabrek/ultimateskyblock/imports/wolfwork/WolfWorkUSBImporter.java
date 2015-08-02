@@ -30,7 +30,7 @@ public class WolfWorkUSBImporter implements USBImporter {
             }
             us.talabrek.ultimateskyblock.player.PlayerInfo pi = importPlayerInfo(plugin, playerInfo);
             importIsland(plugin, playerInfo, pi);
-            plugin.removeActivePlayer(pi.getPlayerName());
+            plugin.getPlayerLogic().removeActivePlayer(pi);
             if (!file.delete()) {
                 file.deleteOnExit();
             }
@@ -117,7 +117,6 @@ public class WolfWorkUSBImporter implements USBImporter {
             }
             // Not really that important - since it's most likely different!
             islandInfo.setLevel(playerInfo.getIslandLevel());
-            islandInfo.setMaxPartySize(4);
             islandInfo.setBiome("OCEAN");
             islandInfo.save();
             WorldGuardHandler.updateRegion(Bukkit.getConsoleSender(), islandInfo);

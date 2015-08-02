@@ -1,23 +1,5 @@
 package us.talabrek.ultimateskyblock.island;
 
-import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
-import org.bukkit.Location;
-import org.bukkit.OfflinePlayer;
-import org.bukkit.World;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.InvalidConfigurationException;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.entity.Player;
-import us.talabrek.ultimateskyblock.Settings;
-import us.talabrek.ultimateskyblock.handler.VaultHandler;
-import us.talabrek.ultimateskyblock.handler.WorldGuardHandler;
-import us.talabrek.ultimateskyblock.player.PlayerInfo;
-import us.talabrek.ultimateskyblock.uSkyBlock;
-import us.talabrek.ultimateskyblock.util.LocationUtil;
-import us.talabrek.ultimateskyblock.util.UUIDUtil;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -29,9 +11,24 @@ import java.util.Date;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
-
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.InvalidConfigurationException;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
+import us.talabrek.ultimateskyblock.Settings;
+import us.talabrek.ultimateskyblock.handler.VaultHandler;
+import us.talabrek.ultimateskyblock.handler.WorldGuardHandler;
+import us.talabrek.ultimateskyblock.player.PlayerInfo;
+import us.talabrek.ultimateskyblock.uSkyBlock;
 import static us.talabrek.ultimateskyblock.util.FileUtil.readConfig;
 import static us.talabrek.ultimateskyblock.util.I18nUtil.tr;
+import us.talabrek.ultimateskyblock.util.LocationUtil;
+import us.talabrek.ultimateskyblock.util.UUIDUtil;
 
 /**
  * Data object for an island
@@ -50,12 +47,30 @@ public class IslandInfo {
         name = islandName;
         if (file.exists()) {
             readConfig(config, file);
-        }
-        if (config.getInt("version", 0) < YML_VERSION) {
-            updateConfig();
+
+            // Backwards compatibility.
+            if (config.contains("maxSize")) {
+                int oldMaxSize = config.getInt("maxSize");
+                if (oldMaxSize > Settings.general_maxPartySize) {
+                    ConfigurationSection leaderSection = config.getConfigurationSection("party.members." + getLeader());
+                    if (leaderSection != null) {
+                        leaderSection.set("maxPartySizePermission", oldMaxSize);
+                    }
+                }
+                config.set("maxSize", null);
+                save();
+            }
+
+            if (config.getInt("version", 0) < YML_VERSION) {
+                updateConfig();
+            }
         }
     }
 
+    public boolean exists() {
+        return this.file.exists();
+    }
+    
     private void updateConfig() {
         int currentVersion = config.getInt("version", 0);
         if (currentVersion < 1) {
@@ -72,7 +87,7 @@ public class IslandInfo {
         directory = dir;
     }
 
-    public void clearIslandConfig(final String leader) {
+    public void resetIslandConfig(final String leader) {
         config.set("general.level", 0);
         config.set("general.warpLocationX", 0);
         config.set("general.warpLocationY", 0);
@@ -80,6 +95,7 @@ public class IslandInfo {
         config.set("general.warpActive", false);
         config.set("log.logPos", 1);
         config.set("version", YML_VERSION);
+        config.set("party", null);
         setupPartyLeader(leader);
         sendMessageToIslandGroup("The island has been created.");
     }
@@ -93,7 +109,18 @@ public class IslandInfo {
         section.set("canToggleWarp", true);
         section.set("canInviteOthers", true);
         section.set("canKickOthers", true);
+        section.set("canBanOthers", true);
         config.set("party.currentSize", getMembers().size());
+
+        Player onlinePlayer = Bukkit.getPlayer(leader);
+        // The only time the onlinePlayer will be null is if it is being converted from another skyblock plugin.
+        if (onlinePlayer != null && onlinePlayer.isOnline()) {
+            int maxPartySizePermission = getSpecialMaxPartySizePermission(onlinePlayer);
+            if (maxPartySizePermission > 0) {
+                section.set("maxPartySizePermission", maxPartySizePermission);
+            }
+        }
+
         save();
     }
 
@@ -109,8 +136,41 @@ public class IslandInfo {
         section.set("canInviteOthers", false);
         section.set("canKickOthers", false);
         section.set("canBanOthers", false);
+
+        Player onlinePlayer = Bukkit.getPlayer(member);
+        // The only time the onlinePlayer will be null is if it is being converted from another skyblock plugin.
+        if (onlinePlayer != null && onlinePlayer.isOnline()) {
+            int maxPartySizePermission = getSpecialMaxPartySizePermission(onlinePlayer);
+            if (maxPartySizePermission > 0) {
+                section.set("maxPartySizePermission", maxPartySizePermission);
+            }
+        }
+
         WorldGuardHandler.addPlayerToOldRegion(name, member);
         save();
+    }
+
+    public void handleMemberLoggedIn(final Player member) {
+        ConfigurationSection section = config.getConfigurationSection("party.members." + member);
+        if (section != null) {
+            int maxPartySizePermission = getSpecialMaxPartySizePermission(member);
+            if (maxPartySizePermission > 0) {
+                if (section.contains("maxPartySizePermission")) {
+                    if (section.getInt("maxPartySizePermission") != maxPartySizePermission) {
+                        section.set("maxPartySizePermission", maxPartySizePermission);
+                        save();
+                    }
+                } else {
+                    section.set("maxPartySizePermission", maxPartySizePermission);
+                    save();
+                }
+            } else {
+                if (section.contains("maxPartySizePermission")) {
+                    section.set("maxPartySizePermission", null);
+                    save();
+                }
+            }
+        }
     }
 
     public void save() {
@@ -133,17 +193,41 @@ public class IslandInfo {
         save();
     }
 
-    public void updatePartyNumber(final Player player) {
-        if (config.getInt("party.maxSize") < 8 && VaultHandler.checkPerk(player.getName(), "usb.extra.partysize", player.getWorld())) {
-            config.set("party.maxSize", 8);
-        } else if (config.getInt("party.maxSize") < 7 && VaultHandler.checkPerk(player.getName(), "usb.extra.party3", player.getWorld())) {
-            config.set("party.maxSize", 7);
-        } else if (config.getInt("party.maxSize") < 6 && VaultHandler.checkPerk(player.getName(), "usb.extra.party2", player.getWorld())) {
-            config.set("party.maxSize", 6);
-        } else if (config.getInt("party.maxSize") < 5 && VaultHandler.checkPerk(player.getName(), "usb.extra.party1", player.getWorld())) {
-            config.set("party.maxSize", 5);
+    public int getMaxPartySize() {
+        int maxSize = Settings.general_maxPartySize;
+
+        ConfigurationSection membersSection = config.getConfigurationSection("party.members");
+        if (membersSection != null) {
+            for (String memberName : membersSection.getKeys(false)) {
+                ConfigurationSection memberSection = membersSection.getConfigurationSection(memberName);
+                if (memberSection != null) {
+                    if (memberSection.contains("maxPartySizePermission")) {
+                        int memberMaxPartySizePermission = memberSection.getInt("maxPartySizePermission");
+                        if (memberMaxPartySizePermission > maxSize) {
+                            maxSize = memberMaxPartySizePermission;
+                        }
+                    }
+                }
+            }
         }
-        save();
+
+        return maxSize;
+    }
+
+    private int getSpecialMaxPartySizePermission(final Player player) {
+        int memberPartySizePermission = -1;
+
+        if (VaultHandler.checkPerk(player.getName(), "usb.extra.partysize", player.getWorld())) {
+            memberPartySizePermission = 8;
+        } else if (VaultHandler.checkPerk(player.getName(), "usb.extra.party3", player.getWorld())) {
+            memberPartySizePermission = 7;
+        } else if (VaultHandler.checkPerk(player.getName(), "usb.extra.party2", player.getWorld())) {
+            memberPartySizePermission = 6;
+        } else if (VaultHandler.checkPerk(player.getName(), "usb.extra.party1", player.getWorld())) {
+            memberPartySizePermission = 5;
+        }
+
+        return memberPartySizePermission;
     }
 
     public String getLeader() {
@@ -239,7 +323,7 @@ public class IslandInfo {
     public void lock(Player player) {
         WorldGuardHandler.islandLock(player, name);
         config.set("general.locked", true);
-        sendMessageToIslandGroup("\u00a7b"+player.getName() + "\u00a7d locked the island.");
+        sendMessageToIslandGroup("\u00a7b" + player.getName() + "\u00a7d locked the island.");
         if (hasWarp()) {
             config.set("general.warpActive", false);
             player.sendMessage(tr("\u00a74Since your island is locked, your incoming warp has been deactivated."));
@@ -251,7 +335,7 @@ public class IslandInfo {
     public void unlock(Player player) {
         WorldGuardHandler.islandUnlock(player, name);
         config.set("general.locked", false);
-        sendMessageToIslandGroup("\u00a7b"+player.getName() + "\u00a7d unlocked the island.");
+        sendMessageToIslandGroup("\u00a7b" + player.getName() + "\u00a7d unlocked the island.");
         save();
     }
 
@@ -264,10 +348,6 @@ public class IslandInfo {
             }
         }
         log("\u00a7d[" + dateTxt + "] " + message);
-    }
-
-    public int getMaxPartySize() {
-        return config.getInt("party.maxSize", 4);
     }
 
     public boolean isBanned(Player player) {
@@ -317,10 +397,38 @@ public class IslandInfo {
         return config.getStringList("banned.list");
     }
 
+    public List<String> getTrustees() {
+        return config.getStringList("trust.list");
+    }
+
+    public void trust(String name) {
+        List<String> trustees = getTrustees();
+        if (!trustees.contains(name)) {
+            trustees.add(name);
+            config.set("trust.list", trustees);
+        }
+        PlayerInfo playerInfo = uSkyBlock.getInstance().getPlayerInfo(name);
+        if (playerInfo != null) {
+            playerInfo.addTrust(name);
+        }
+        save();
+    }
+
+    public void untrust(String name) {
+        List<String> trustees = getTrustees();
+        trustees.remove(name);
+        config.set("trust.list", trustees);
+        PlayerInfo playerInfo = uSkyBlock.getInstance().getPlayerInfo(name);
+        if (playerInfo != null) {
+            playerInfo.removeTrust(name);
+        }
+        save();
+    }
+
     public void removeMember(PlayerInfo member) {
         WorldGuardHandler.removePlayerFromRegion(name, member.getPlayerName());
         member.setHomeLocation(null);
-        member.setLeaveParty();
+        member.removeFromIsland();
         member.save();
         removeMember(member.getPlayerName());
     }
@@ -329,7 +437,7 @@ public class IslandInfo {
         config.set("party.members." + playername, null);
         config.set("party.currentSize", getPartySize() - 1);
         save();
-        sendMessageToIslandGroup("\u00a7b" +playername + "\u00a7d has been removed from the island group.");
+        sendMessageToIslandGroup("\u00a7b" + playername + "\u00a7d has been removed from the island group.");
     }
 
     public void setLevel(double score) {
@@ -354,7 +462,7 @@ public class IslandInfo {
         List<String> log = new ArrayList<>();
         int cLog = config.getInt("log.logPos", 1);
         for (int i = 0; i < 10; i++) {
-            String msg = config.getString("log." + (((cLog+i) % 10)+1), "");
+            String msg = config.getString("log." + (((cLog + i) % 10) + 1), "");
             if (msg != null && !msg.trim().isEmpty()) {
                 log.add(msg);
             }
@@ -364,11 +472,6 @@ public class IslandInfo {
 
     public boolean isParty() {
         return getMembers().size() > 1;
-    }
-
-    public void setMaxPartySize(int size) {
-        config.set("party.maxSize", size);
-        save();
     }
 
     public Location getWarpLocation() {
@@ -390,13 +493,14 @@ public class IslandInfo {
     @Override
     public String toString() {
         String str = "\u00a7bIsland Info:\n";
-        str += ChatColor.GRAY + "  - level: " + ChatColor.DARK_AQUA + String.format("%5.2f", getLevel()) +"\n";
-        str += ChatColor.GRAY + "  - location: " + ChatColor.DARK_AQUA +  name + "\n";
-        str += ChatColor.GRAY + "  - warp: " + ChatColor.DARK_AQUA +  hasWarp() + "\n";
+        str += ChatColor.GRAY + "  - level: " + ChatColor.DARK_AQUA + String.format("%5.2f", getLevel()) + "\n";
+        str += ChatColor.GRAY + "  - location: " + ChatColor.DARK_AQUA + name + "\n";
+        str += ChatColor.GRAY + "  - biome: " + ChatColor.DARK_AQUA + getBiome() + "\n";
+        str += ChatColor.GRAY + "  - warp: " + ChatColor.DARK_AQUA + hasWarp() + "\n";
         if (hasWarp()) {
             str += ChatColor.GRAY + "     loc: " + ChatColor.DARK_AQUA + LocationUtil.asString(getWarpLocation()) + "\n";
         }
-        str += ChatColor.GRAY + "  - locked: " + ChatColor.DARK_AQUA +  isLocked() + "\n";
+        str += ChatColor.GRAY + "  - locked: " + ChatColor.DARK_AQUA + isLocked() + "\n";
         str += ChatColor.DARK_AQUA + "Party:\n";
         str += ChatColor.GRAY + "  - leader: " + ChatColor.DARK_AQUA + getLeader() + "\n";
         str += ChatColor.GRAY + "  - members: " + ChatColor.DARK_AQUA + getMembers() + "\n";
@@ -446,6 +550,13 @@ public class IslandInfo {
             config.set("banned.list", bans);
             dirty = true;
         }
+        List<String> trustees = getTrustees();
+        if (trustees.contains(oldName)) {
+            trustees.remove(oldName);
+            trustees.add(newName);
+            config.set("trust.list", trustees);
+            dirty = true;
+        }
         if (dirty) {
             WorldGuardHandler.updateRegion(player, this);
             save();
@@ -458,13 +569,13 @@ public class IslandInfo {
             for (String memberName : members.getKeys(false)) {
                 String uuid = members.getString(memberName + ".uuid", null);
                 if (uuid != null) {
-                    OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(UUIDUtil.fromString(uuid));
-                    if (offlinePlayer != null && offlinePlayer.isOnline()) {
+                    Player onlinePlayer = Bukkit.getPlayer(UUIDUtil.fromString(uuid));
+                    if (onlinePlayer != null) {
                         return true;
                     }
                 } else {
-                    OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(memberName);
-                    if (offlinePlayer != null && offlinePlayer.isOnline()) {
+                    Player onlinePlayer = Bukkit.getPlayer(memberName);
+                    if (onlinePlayer != null) {
                         return true;
                     }
                 }

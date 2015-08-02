@@ -15,7 +15,7 @@ public class WarpCommand extends RequirePlayerCommand {
     private final uSkyBlock plugin;
 
     public WarpCommand(uSkyBlock plugin) {
-        super("warp|w", "usb.island.warp", "island", "warp to another player's island");
+        super("warp|w", "usb.island.warp", "island", tr("warp to another player's island"));
         this.plugin = plugin;
     }
 
@@ -42,18 +42,36 @@ public class WarpCommand extends RequirePlayerCommand {
             return true;
         } else if (args.length == 1) {
             if (VaultHandler.checkPerk(player.getName(), "usb.island.warp", player.getWorld())) {
-                PlayerInfo playerInfo = plugin.getPlayerInfo(args[0]);
-                if (playerInfo == null || !playerInfo.getHasIsland()) {
+                PlayerInfo senderPlayerInfo = plugin.getPlayerInfo(player);
+                if (senderPlayerInfo.isIslandGenerating()) {
+                    player.sendMessage(tr("\u00a7cYour island is in the process of generating, you cannot warp to other players islands right now."));
+                    return true;
+                }
+                if (senderPlayerInfo.isIslandRestarting()) {
+                    player.sendMessage(tr("\u00a7cYour island is in the process of restarting, you cannot warp to other players islands right now."));
+                    return true;
+                }
+
+                PlayerInfo targetPlayerInfo = plugin.getPlayerInfo(args[0]);
+                if (targetPlayerInfo == null || !targetPlayerInfo.getHasIsland()) {
                     player.sendMessage(tr("\u00a74That player does not exist!"));
                     return true;
                 }
-                IslandInfo island = plugin.getIslandInfo(playerInfo);
+                IslandInfo island = plugin.getIslandInfo(targetPlayerInfo);
                 if (!island.hasWarp()) {
                     player.sendMessage(tr("\u00a74That player does not have an active warp."));
                     return true;
                 }
+                if (targetPlayerInfo.isIslandGenerating()) {
+                    player.sendMessage(tr("\u00a7cThat players island is in the process of generating, you cannot warp to it right now."));
+                    return true;
+                }
+                if (targetPlayerInfo.isIslandRestarting()) {
+                    player.sendMessage(tr("\u00a7cThat players island is in the process of restarting, you cannot warp to it right now."));
+                    return true;
+                }
                 if (!island.isBanned(player)) {
-                    plugin.warpTeleport(player, playerInfo, false);
+                    plugin.warpTeleport(player, targetPlayerInfo, false);
                 } else {
                     player.sendMessage(tr("\u00a74That player has forbidden you from warping to their island."));
                 }

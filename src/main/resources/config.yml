@@ -1,4 +1,4 @@
-# The language used in the plugin (en is default, currently, only da is partially supported).
+# The language used in the plugin (en is default).
 language: en
 options:
   general:
@@ -61,7 +61,7 @@ options:
     protectionRange: 105
 
     # [integer] The delay in seconds before teleporting to an island. Affects /is home, /is warp, /is spawn
-    islandTeleportDelay: 5
+    islandTeleportDelay: 2
 
     # Allow PvP on the island
     allowPvP: deny
@@ -89,6 +89,10 @@ options:
 
     # [true/false] Whether or not to include island-members on the top-ten scoreboard
     topTenShowMembers: true
+
+    # [true/false] Whether or not to try and fix flat-land issues when players join the server
+    # Note: will make the PlayerJoin event take longer.
+    fixFlatland: false
 
   # Extra menus shown in the main-menu - here we have some donor-menus using chestcommands.
   # Any empty slot can be filled using this format.
@@ -180,10 +184,11 @@ options:
     clearEnderChest: true
 
     # [ticks] The number of ticks to wait, before porting the player back
-    # on /is restart (default: 20)
+    # on /is restart or /is create (default: 20)
     teleportDelay: 20
 
 # DO NOT TOUCH THE FIELDS BELOW
-version: 15
+version: 18
 force-replace:
   options.party.invite-timeout: 100
+  options.island.islandTeleportDelay: 5

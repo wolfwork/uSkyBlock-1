@@ -5,6 +5,7 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import us.talabrek.ultimateskyblock.Settings;
+import us.talabrek.ultimateskyblock.async.Callback;
 import us.talabrek.ultimateskyblock.command.common.AbstractUSBCommand;
 import us.talabrek.ultimateskyblock.command.common.CompositeUSBCommand;
 import us.talabrek.ultimateskyblock.command.completion.AbstractTabCompleter;
@@ -23,8 +24,8 @@ import static us.talabrek.ultimateskyblock.util.I18nUtil.tr;
  */
 public class CooldownCommand extends CompositeUSBCommand {
     public CooldownCommand(final uSkyBlock plugin) {
-        super("cooldown|cd", "usb.admin.cooldown", "player", "Controls player-cooldowns");
-        add(new AbstractUSBCommand("clear|c", null, "command", "clears the cooldown on a command (* = all)") {
+        super("cooldown|cd", "usb.admin.cooldown", "player", tr("Controls player-cooldowns"));
+        add(new AbstractUSBCommand("clear|c", null, "command", tr("clears the cooldown on a command (* = all)")) {
             @Override
             public boolean execute(CommandSender sender, String alias, Map<String, Object> data, String... args) {
                 if (!data.containsKey("p") || !(data.get("p") instanceof Player)) {
@@ -45,7 +46,7 @@ public class CooldownCommand extends CompositeUSBCommand {
                 }
             }
         });
-        add(new AbstractUSBCommand("reset|r", null, "command", "resets the cooldown on the command") {
+        add(new AbstractUSBCommand("reset|r", null, "command", tr("resets the cooldown on the command")) {
             @Override
             public boolean execute(CommandSender sender, String alias, Map<String, Object> data, String... args) {
                 if (!data.containsKey("p") || !(data.get("p") instanceof Player)) {
@@ -64,7 +65,7 @@ public class CooldownCommand extends CompositeUSBCommand {
                 }
             }
         });
-        add(new AbstractUSBCommand("list|l", "lists all the active cooldowns") {
+        add(new AbstractUSBCommand("list|l", tr("lists all the active cooldowns")) {
             @Override
             public boolean execute(CommandSender sender, String alias, Map<String, Object> data, String... args) {
                 if (data.containsKey("uuid") && data.get("uuid") instanceof UUID) {
@@ -101,18 +102,40 @@ public class CooldownCommand extends CompositeUSBCommand {
     }
 
     @Override
-    public boolean execute(CommandSender sender, String alias, Map<String, Object> data, String... args) {
+    public boolean execute(final CommandSender sender, final String alias, final Map<String, Object> data, final String... args) {
         if (args.length > 0) {
-            String playerName = args[0];
-            data.put("playerName", playerName);
-            OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerName);
-            if (offlinePlayer != null && offlinePlayer.getUniqueId() != null) {
-                data.put("uuid", offlinePlayer.getUniqueId());
-                if (offlinePlayer.isOnline()) {
-                    data.put("p", offlinePlayer.getPlayer());
+            final String playerName = args[0];
+            final Callback<OfflinePlayer> callback = new Callback<OfflinePlayer>() {
+                @Override
+                public void run() {
+                    data.put("playerName", playerName);
+                    OfflinePlayer offlinePlayer = this.getState();
+                    if (offlinePlayer != null && offlinePlayer.getUniqueId() != null) {
+                        data.put("uuid", offlinePlayer.getUniqueId());
+                        if (offlinePlayer.isOnline()) {
+                            data.put("p", offlinePlayer.getPlayer());
+                        }
+                    }
+                    CooldownCommand.super.execute(sender, alias, data, args);
                 }
-            }
+            };
+            uSkyBlock.getInstance().getServer().getScheduler().runTaskAsynchronously(uSkyBlock.getInstance(), new Runnable() {
+                @Override
+                public void run() {
+                    // Do the getOfflinePlayer async since it does a UUID lookup in some cases.
+                    callback.setState(Bukkit.getOfflinePlayer(playerName));
+                    // Run the command sync.
+                    uSkyBlock.getInstance().getServer().getScheduler().runTask(uSkyBlock.getInstance(), new Runnable() {
+                        @Override
+                        public void run() {
+                            callback.run();
+                        }
+                    });
+                }
+            });
+            return true;
         }
+
         return super.execute(sender, alias, data, args);
     }
 }

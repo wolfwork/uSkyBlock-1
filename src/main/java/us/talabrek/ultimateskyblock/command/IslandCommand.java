@@ -13,20 +13,25 @@ import us.talabrek.ultimateskyblock.command.completion.OnlinePlayerTabCompleter;
 import us.talabrek.ultimateskyblock.command.island.*;
 import us.talabrek.ultimateskyblock.uSkyBlock;
 
+import static us.talabrek.ultimateskyblock.util.I18nUtil.tr;
+
 /**
  * The main /island command
  */
 public class IslandCommand extends AbstractCommandExecutor {
+    private final uSkyBlock plugin;
     private final SkyBlockMenu menu;
 
     public IslandCommand(uSkyBlock plugin, SkyBlockMenu menu) {
-        super("island|is", "usb.island.create", "general island command");
+        super("island|is", "usb.island.create", tr("general island command"));
+        this.plugin = plugin;
         this.menu = menu;
         InviteHandler inviteHandler = new InviteHandler(plugin);
-        AllPlayerTabCompleter playerTabCompleter = new AllPlayerTabCompleter();
+        OnlinePlayerTabCompleter onlinePlayerTabCompleter = new OnlinePlayerTabCompleter();
+        AllPlayerTabCompleter playerTabCompleter = new AllPlayerTabCompleter(onlinePlayerTabCompleter);
         addTab("island", playerTabCompleter);
         addTab("player", playerTabCompleter);
-        addTab("oplayer", new OnlinePlayerTabCompleter());
+        addTab("oplayer", onlinePlayerTabCompleter);
         addTab("biome", new BiomeTabCompleter());
         addTab("member", new MemberTabCompleter(plugin));
         add(new RestartCommand(plugin));
@@ -52,14 +57,21 @@ public class IslandCommand extends AbstractCommandExecutor {
         add(new PartyCommand(plugin, menu, inviteHandler));
         add(new MakeLeaderCommand(plugin));
         add(new SpawnCommand(plugin));
+        add(new TrustCommand(plugin));
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String alias, String[] args) {
-        if (args.length == 0 && sender instanceof Player) {
+        if (sender instanceof Player) {
             Player player = (Player) sender;
-            player.openInventory(menu.displayIslandGUI(player));
-            return true;
+            if (plugin.getPlayerLogic().isLocked(player) || plugin.getPlayerLogic().getPlayerInfo(player) == null) {
+                sender.sendMessage(tr("\u00a74Your island data is being loaded, please try again later."));
+                return true;
+            }
+            if (args.length == 0) {
+                player.openInventory(menu.displayIslandGUI(player));
+                return true;
+            }
         }
         return super.onCommand(sender, command, alias, args);
     }
